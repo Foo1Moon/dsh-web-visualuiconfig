@@ -27,6 +27,19 @@ Link the local source for development, then **restart `dsh web`** — the settin
 dsh plugin --profile web add link:C:/path/to/dsh-web-visualuiconfig
 ```
 
+### Install via the DSH agent
+
+No terminal needed: in a DSH conversation, just ask the agent to install the plugin for you — it clones the repository, mounts it into the web profile with a `link:` entry, and reminds you to restart `dsh web`:
+
+> Please install the dsh-web-visualuiconfig plugin.
+
+The agent runs the equivalent of:
+
+```sh
+git clone https://github.com/Foo1Moon/dsh-web-visualuiconfig.git
+dsh plugin --profile web add link:<cloned repo path>
+```
+
 ## Configuration storage
 
 The config lives in browser `localStorage` under the single versioned key `dsh.personalization.v1`: it survives a `dsh web` restart on the same machine/browser, but does **not** follow you to another browser or machine. This needs no `~/.dsh/settings.yaml` change and is not affected by the `dsh-host-apiproxy` `WEB_SETTINGS_NAMESPACES` whitelist.

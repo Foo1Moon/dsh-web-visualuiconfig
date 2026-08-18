@@ -27,6 +27,19 @@
 dsh plugin --profile web add link:C:/path/to/dsh-web-visualuiconfig
 ```
 
+### 用 Agent 安装
+
+不想手动敲命令的话，直接在 DSH 对话里让 agent 帮你装：它会克隆仓库、以 `link:` 方式挂载进 web profile，并提醒你重启 `dsh web`：
+
+> 帮我安装 dsh-web-visualuiconfig 插件。
+
+agent 实际执行的命令等价于：
+
+```sh
+git clone https://github.com/Foo1Moon/dsh-web-visualuiconfig.git
+dsh plugin --profile web add link:<克隆到的路径>
+```
+
 ## 配置存储
 
 配置存于浏览器 `localStorage`（键 `dsh.personalization.v1`）：**重启 dsh 后仍生效，但换浏览器或换电脑不跟随**。因此无需修改 `~/.dsh/settings.yaml`，也不受 `dsh-host-apiproxy` 的 `WEB_SETTINGS_NAMESPACES` 白名单限制。
