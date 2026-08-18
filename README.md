@@ -20,12 +20,9 @@ A standalone, hot-pluggable DeepSeek Harness (DSH) Web GUI plugin that layers sw
 
 ## Install
 
-Install from npm after publish, or link the local source for development, then **restart `dsh web`** — the settings panel gains a "Personalization" page.
+Link the local source for development, then **restart `dsh web`** — the settings panel gains a "Personalization" page.
 
 ```sh
-### 从 npm 安装（推荐）
-dsh plugin --profile web add dsh-web-visualuiconfig
-
 ### 从本地源码安装（开发调试）
 dsh plugin --profile web add link:C:/path/to/dsh-web-visualuiconfig
 ```

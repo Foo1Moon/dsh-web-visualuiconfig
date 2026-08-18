@@ -20,12 +20,9 @@
 
 ## 安装
 
-从 npm 安装（发布后），或链接本地源码用于开发调试，安装后**重启 `dsh web`**：设置 → 设置面板左侧会出现「个性化」页面。
+链接本地源码用于开发调试，安装后**重启 `dsh web`**：设置 → 设置面板左侧会出现「个性化」页面。
 
 ```sh
-### 从 npm 安装（推荐）
-dsh plugin --profile web add dsh-web-visualuiconfig
-
 ### 从本地源码安装（开发调试）
 dsh plugin --profile web add link:C:/path/to/dsh-web-visualuiconfig
 ```
