@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-visualuiconfig",
   "description": "DSH Web GUI 个性化插件：背景图、遮罩浓度、半透明面板、主题色板、字体、滚动条、选中色、favicon 与标题自定义。",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
@@ -56,6 +56,7 @@
   "scripts": {
     "build": "tsdown",
     "watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"tests/**/*.spec.ts\""
   }
 }

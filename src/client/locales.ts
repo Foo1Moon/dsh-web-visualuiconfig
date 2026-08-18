@@ -7,6 +7,11 @@
 /** Copy keys for the personalization settings page. */
 export type PersonalizationKey =
   | 'nav'
+  | 'storage.title'
+  | 'storage.desc'
+  | 'storage.host'
+  | 'storage.browser'
+  | 'storage.hostUnavailable'
   | 'master.title'
   | 'master.desc'
   | 'scope.title'
@@ -59,6 +64,11 @@ export type PersonalizationKey =
 /** Chinese copy. */
 export const zh: Record<PersonalizationKey, string> = {
   'nav': '个性化',
+  'storage.title': '配置存储',
+  'storage.desc': '默认保存到本机（~/.dsh 文件），换浏览器或电脑仍然生效；可切换为仅保存在当前浏览器',
+  'storage.host': '跟随本机',
+  'storage.browser': '仅此浏览器',
+  'storage.hostUnavailable': '主机存储当前不可用（插件宿主侧可能尚未加载，请重启 dsh web），已临时回退为仅保存在当前浏览器',
   'master.title': '启用个性化',
   'master.desc': '关闭后立即还原官方外观',
   'scope.title': '编辑目标',
@@ -106,12 +116,17 @@ export const zh: Record<PersonalizationKey, string> = {
   'chrome.titleClear': '清除',
   'reset': '恢复默认设置',
   'reset.confirm': '确定恢复全部默认设置？',
-  'hint': '配置保存在当前浏览器的 localStorage：重启 dsh 后仍然生效，但换浏览器或换电脑不会跟随。',
+  'hint': '配置默认跟随本机（存于 ~/.dsh/dsh-web-personalization.json），重启 dsh 或换浏览器仍然生效；可在上方切换为仅保存在当前浏览器。',
 }
 
 /** English copy. */
 export const en: Record<PersonalizationKey, string> = {
   'nav': 'Personalization',
+  'storage.title': 'Config storage',
+  'storage.desc': 'Defaults to this machine (~/.dsh file) and follows you across browsers; switch to keep it in this browser only',
+  'storage.host': 'Follow this machine',
+  'storage.browser': 'This browser only',
+  'storage.hostUnavailable': 'Host storage is unavailable right now (the plugin host half may not be loaded; restart dsh web), temporarily falling back to this browser only',
   'master.title': 'Enable personalization',
   'master.desc': 'Turning this off restores the official look immediately',
   'scope.title': 'Edit target',
@@ -159,5 +174,5 @@ export const en: Record<PersonalizationKey, string> = {
   'chrome.titleClear': 'Clear',
   'reset': 'Reset all settings',
   'reset.confirm': 'Reset everything to defaults?',
-  'hint': 'Settings are saved in this browser\'s localStorage: they survive a dsh restart, but do not follow you to another browser or machine.',
+  'hint': 'Settings follow this machine by default (~/.dsh/dsh-web-personalization.json): they survive a dsh restart and follow you to another browser. Use the switch above to keep them in this browser only.',
 }

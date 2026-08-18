@@ -26,7 +26,7 @@ import type { PersonalizationKey } from './locales.ts'
 import { compressImage } from './image.ts'
 import { detectPanels, PANEL_SCOPE_SELECTOR, type PanelInfo } from './panels.ts'
 import {
-  PANEL_IDS, resolvePanelConfig,
+  PANEL_IDS, resolvePanelConfig, resolveImageSource,
   type PanelBackgroundSettings, type PanelConfig, type PanelFollowConfig, type PanelId, type PersonalizationConfig,
 } from './settings.ts'
 import css from './personalization.module.css'
@@ -39,6 +39,10 @@ export interface PersonalizationInjected {
   update: (recipe: (prev: PersonalizationConfig) => PersonalizationConfig) => void
   /** Reset the whole config to defaults and persist. */
   reset: () => void
+  /** Whether the host half answered at least once (host storage usable). */
+  useHostAvailable: () => boolean
+  /** Upload a compressed image to the host store; returns an `asset:` id or null. */
+  uploadImage: (dataUrl: string) => Promise<string | null>
 }
 
 /** Full component props: runtime share + locale seat + injected face. */
@@ -160,8 +164,10 @@ function KnobGroup(props: {
  * @param props - composed slot props.
  * @returns the settings page element tree.
  */
-export function PersonalizationSection({ t, useConfig, update, reset }: PersonalizationSectionProps) {
+export function PersonalizationSection({ t, useConfig, update, reset, useHostAvailable, uploadImage }: PersonalizationSectionProps) {
   const config = useConfig()
+  const hostAvailable = useHostAvailable()
+  const hostMode = config.storageMode === 'host' && hostAvailable
   const backgroundInput = useRef<HTMLInputElement>(null)
   const globalBgInput = useRef<HTMLInputElement>(null)
   const faviconInput = useRef<HTMLInputElement>(null)
@@ -388,6 +394,16 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
       setPanel({ background: { ...(followCfg?.background ?? { follow: false, mode: 'solid' as const, image: null, scrim: 0.25 }), follow: false, ...patch } })
     }
   }
+  /** Store a compressed image: upload to the host in host mode (returning an
+   *  `asset:` id), otherwise keep the data URL. A failed upload falls back to
+   *  the data URL so the image still works in the current session. */
+  const storeImage = async (dataUrl: string): Promise<string> => {
+    if (hostMode) {
+      const id = await uploadImage(dataUrl)
+      if (id !== null) return id
+    }
+    return dataUrl
+  }
   /** Pick the target's backdrop image. The "all panels" upload is a source
    *  bridge: the image is stored as-is (compressed only) and each panel crops
    *  it to its own shape when rendering (cover). A single-panel upload crops
@@ -405,7 +421,7 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
     }
     const dataUrl = await compressImage(file, { aspect })
     if (dataUrl !== null) {
-      writeBg({ mode: 'image', image: dataUrl })
+      writeBg({ mode: 'image', image: await storeImage(dataUrl) })
     }
   }
   const removeBgImage = (): void => writeBg({ image: null })
@@ -417,7 +433,7 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
     if (file === undefined) return
     const dataUrl = await compressImage(file, { maxWidth: 128, quality: 0.9 })
     if (dataUrl !== null) {
-      set({ chrome: { ...config.chrome, favicon: dataUrl } })
+      set({ chrome: { ...config.chrome, favicon: await storeImage(dataUrl) } })
     }
   }
 
@@ -428,7 +444,7 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
     if (file === undefined) return
     const dataUrl = await compressImage(file)
     if (dataUrl !== null) {
-      set({ globalBackground: { ...config.globalBackground, image: dataUrl } })
+      set({ globalBackground: { ...config.globalBackground, image: await storeImage(dataUrl) } })
     }
   }
 
@@ -449,6 +465,29 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
             onChange={(e) => set({ enabled: e.target.checked })}
           />
         </label>
+      </div>
+
+      <div className={css.group}>
+        <div className={css.groupTitle}>{t('storage.title')}</div>
+        <div className={css.rowDesc}>{t('storage.desc')}</div>
+        <div className={css.segRow}>
+          {([
+            ['host', t('storage.host')],
+            ['browser', t('storage.browser')],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              className={`${css.segButton} ${config.storageMode === mode ? css.segActive : ''}`}
+              onClick={() => set({ storageMode: mode })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {config.storageMode === 'host' && !hostAvailable && (
+          <div className={css.rowHint}>{t('storage.hostUnavailable')}</div>
+        )}
       </div>
 
       <div className={css.group}>
@@ -699,7 +738,7 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
                 </button>
                 {bgHasImage && (
                   <>
-                    <ImageThumb src={shownBg.image ?? undefined} aspect={isAll ? undefined : panelAspect} />
+                    <ImageThumb src={resolveImageSource(shownBg.image) ?? undefined} aspect={isAll ? undefined : panelAspect} />
                     <button
                       type="button"
                       className={css.buttonGhost}
@@ -740,7 +779,7 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
               <button type="button" className={css.buttonGhost} onClick={() => set({ globalBackground: { ...config.globalBackground, image: null } })}>
                 {t('background.remove')}
               </button>
-              <ImageThumb src={config.globalBackground.image} />
+              <ImageThumb src={resolveImageSource(config.globalBackground.image) ?? undefined} />
             </>
           )}
         </div>
@@ -766,7 +805,7 @@ export function PersonalizationSection({ t, useConfig, update, reset }: Personal
           </button>
           {config.chrome.favicon !== null && (
             <>
-              <img className={css.faviconPreview} src={config.chrome.favicon} alt="" />
+              <img className={css.faviconPreview} src={resolveImageSource(config.chrome.favicon) ?? undefined} alt="" />
               <button type="button" className={css.buttonGhost} onClick={() => set({ chrome: { ...config.chrome, favicon: null } })}>
                 {t('chrome.faviconRemove')}
               </button>

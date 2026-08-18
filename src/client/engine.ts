@@ -18,6 +18,7 @@
  */
 import type { PanelConfig, PanelId, PersonalizationConfig } from './settings.ts'
 import { PANEL_IDS, resolvePanelConfig } from './settings.ts'
+import { isAssetRef, parseAssetRef, resolveImageSource } from '../shared/config.ts'
 import { PANEL_SCOPE_SELECTOR } from './panels.ts'
 
 /** Body attribute selecting the personalization CSS scope. */
@@ -410,8 +411,13 @@ function declarations(tokens: Record<string, string>): string {
 const blobUrlCache = new Map<string, string>()
 
 /** Convert a data URI to a cached blob URL. Falls back to the raw data URI
- *  in non-browser environments (jsdom diagnostics lack createObjectURL). */
+ *  in non-browser environments (jsdom diagnostics lack createObjectURL).
+ *  `asset:` refs bypass this entirely — they render as short same-origin
+ *  URLs, which the 2 MB CSS `url()` limit does not apply to. */
 function resolveBackgroundUrl(image: string): string {
+  if (image.startsWith('asset:')) {
+    return resolveImageSource(image) ?? image
+  }
   const cached = blobUrlCache.get(image)
   if (cached !== undefined) return cached
   let url = image
@@ -656,8 +662,13 @@ export function applyPersonalization(config: PersonalizationConfig): () => void 
   if (config.chrome.favicon !== null) {
     favicon = document.createElement('link')
     favicon.rel = 'icon'
-    favicon.type = 'image/png'
-    favicon.href = config.chrome.favicon
+    // Host assets carry their own format; data URLs are png (the compressor).
+    const ref = isAssetRef(config.chrome.favicon) ? parseAssetRef(config.chrome.favicon) : null
+    const mime = ref === null
+      ? 'image/png'
+      : ({ jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' })[ref.ext] ?? 'image/png'
+    favicon.type = mime
+    favicon.href = resolveImageSource(config.chrome.favicon) ?? config.chrome.favicon
     document.head.append(favicon)
   }
   if (config.chrome.title !== null) {
