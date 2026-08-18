@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 A standalone, hot-pluggable DeepSeek Harness (DSH) Web GUI plugin that layers switchable visual configuration over the official look — backgrounds, scrim, translucent panels, accent palettes, fonts, scrollbars, selection color, favicon and page title. Everything runs browser-side and persists in `localStorage`; the plugin mounts only through `cordis.patch.yml` and the profile mechanism, without modifying DSH source.
 
+![Personalization settings page](docs/screenshots/Config.png)
+
 ## Capabilities
 
 | Capability | Description |
@@ -17,6 +19,18 @@ A standalone, hot-pluggable DeepSeek Harness (DSH) Web GUI plugin that layers sw
 | Selection color | Custom `::selection` background |
 | Page chrome | Favicon (≤128px) and page-title override |
 | Panel-level personalization | Runtime detection of present panels; the "edit target" selector defaults to "all panels", editing the baseline appearance that every follow knob inherits from. Every module (transparency / palette / font / scrollbar / selection / background) carries a "follow theme" switch — a single-panel view flips that panel's knob, the "all panels" view flips every panel's knob at once — plus a "follow all" master switch in both views. Current panels: sidebar, conversation, details, right file/preview panel (aionui), task board, SSH panel |
+
+## Screenshots
+
+Background-image effect (before / after):
+
+| Before | After |
+| --- | --- |
+| ![Before](docs/screenshots/before.png) | ![After](docs/screenshots/after.png) |
+
+Uploading a background in the settings page:
+
+![Uploading a background](docs/screenshots/bgp.png)
 
 ## Install
 
