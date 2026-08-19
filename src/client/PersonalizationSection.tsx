@@ -26,9 +26,11 @@ import type { PersonalizationKey } from './locales.ts'
 import { compressImage } from './image.ts'
 import { detectPanels, PANEL_SCOPE_SELECTOR, type PanelInfo } from './panels.ts'
 import {
-  PANEL_IDS, resolvePanelConfig, resolveImageSource,
-  type PanelBackgroundSettings, type PanelConfig, type PanelFollowConfig, type PanelId, type PersonalizationConfig,
+  PANEL_IDS, resolvePanelConfig, resolveImageSource, themeIdFromName,
+  type CharacterTheme, type PaletteSeeds, type PanelBackgroundSettings, type PanelConfig, type PanelFollowConfig, type PanelId, type PersonalizationConfig,
 } from './settings.ts'
+import { activateTheme, buildThemePatch, deactivateTheme, findTheme, removeTheme } from '../shared/theme.ts'
+import { analyzeImagePixels, samplePixelsFromDataUrl } from './character-wizard.ts'
 import css from './personalization.module.css'
 
 /** Injected business face: config read/write plus image compression. */
@@ -240,6 +242,8 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
         follow,
         preset: follow ? followCfg.palette.preset : base.palette.preset,
         accent: follow ? followCfg.palette.accent : base.palette.accent,
+        seeds: follow ? followCfg.palette.seeds : base.palette.seeds,
+        appearance: follow ? followCfg.palette.appearance : base.palette.appearance,
       }
     } else if (kind === 'font') {
       patch.font = {
@@ -271,6 +275,8 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
         follow,
         preset: follow ? followCfg.palette.preset : base.palette.preset,
         accent: follow ? followCfg.palette.accent : base.palette.accent,
+        seeds: follow ? followCfg.palette.seeds : base.palette.seeds,
+        appearance: follow ? followCfg.palette.appearance : base.palette.appearance,
       },
       font: {
         follow,
@@ -370,7 +376,13 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
     const base = config.base
     setPanel({
       glass: { follow: true, opacity: base.glass.opacity },
-      palette: { follow: true, preset: base.palette.preset, accent: base.palette.accent },
+      palette: {
+        follow: true,
+        preset: base.palette.preset,
+        accent: base.palette.accent,
+        seeds: base.palette.seeds,
+        appearance: base.palette.appearance,
+      },
       font: { follow: true, family: base.font.family, custom: base.font.custom },
       scrollbar: { follow: true, value: base.scrollbar },
       selection: { follow: true, value: base.selection },
@@ -426,6 +438,71 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
   }
   const removeBgImage = (): void => writeBg({ image: null })
   const setBgScrim = (scrim: number): void => writeBg({ scrim })
+  /** The effective accent shown by the swatches: a custom accent, else the
+   *  seeds' accent (a character theme), else the preset's. */
+  const paletteAccent = shown.palette.accent ?? shown.palette.seeds?.accent ?? null
+
+  /** The extraction wizard: pick a character image → browser extracts the
+   *  four seeds (contrast-preserving) → show a preview → the user confirms
+   *  before anything is applied. Nothing changes while only a draft exists. */
+  const themeNameRef = useRef<HTMLInputElement>(null)
+  const themeImageInput = useRef<HTMLInputElement>(null)
+  const [themeBusy, setThemeBusy] = useState(false)
+  const [themeError, setThemeError] = useState<string | null>(null)
+  const [themeDraft, setThemeDraft] = useState<{
+    name: string
+    sourceImage: string
+    seeds: PaletteSeeds
+    appearance: 'light' | 'dark'
+    pass: boolean
+  } | null>(null)
+  const generateTheme = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file === undefined) return
+    setThemeBusy(true)
+    setThemeError(null)
+    try {
+      const dataUrl = await compressImage(file)
+      if (dataUrl === null) throw new Error(t('theme.generateFailed') + 'image decode failed')
+      const pixels = await samplePixelsFromDataUrl(dataUrl)
+      if (pixels === null) throw new Error(t('theme.generateFailed') + 'canvas unavailable')
+      const analysis = analyzeImagePixels(pixels)
+      const name = (themeNameRef.current?.value ?? '').trim() || 'character'
+      setThemeDraft({
+        name,
+        sourceImage: await storeImage(dataUrl),
+        seeds: analysis.seeds,
+        appearance: analysis.appearance,
+        pass: analysis.pass,
+      })
+    } catch (error) {
+      setThemeError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setThemeBusy(false)
+    }
+  }
+  /** Apply the confirmed draft: build the theme from the previewed seeds. */
+  const applyThemeDraft = (): void => {
+    const draft = themeDraft
+    if (draft === null) return
+    const theme: Omit<CharacterTheme, 'snapshot'> = {
+      id: themeIdFromName(draft.name),
+      name: draft.name,
+      description: '',
+      sourceImage: draft.sourceImage,
+      seeds: draft.seeds,
+      appearance: draft.appearance,
+      createdAt: Date.now(),
+      patch: buildThemePatch({
+        seeds: draft.seeds,
+        appearance: draft.appearance,
+        title: draft.name,
+      }, draft.sourceImage),
+    }
+    update(prev => activateTheme(prev, theme))
+    setThemeDraft(null)
+  }
 
   const pickFavicon = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0]
@@ -465,6 +542,100 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
             onChange={(e) => set({ enabled: e.target.checked })}
           />
         </label>
+      </div>
+
+      {/* Character theme library: themes created from character art +
+          introduction (chat agent or the local extraction wizard below). At
+          most one is active; switching replaces the current look, turning off
+          restores the pre-theme appearance. */}
+      <div className={css.group}>
+        <div className={css.groupTitle}>{t('theme.title')}</div>
+        <div className={css.rowDesc}>{t('theme.desc')}</div>
+        <div className={css.rowDesc}>{t('theme.generateHint')}</div>
+        <div className={css.row}>
+          <input ref={themeImageInput} type="file" accept="image/*" hidden onChange={(e) => { void generateTheme(e) }} />
+          <button type="button" className={css.button} disabled={themeBusy} onClick={() => themeImageInput.current?.click()}>
+            {themeBusy ? t('theme.generateBusy') : t('theme.generate')}
+          </button>
+          <input
+            ref={themeNameRef}
+            type="text"
+            className={css.textInput}
+            placeholder={t('theme.generateName')}
+            defaultValue="character"
+          />
+        </div>
+        {themeError !== null && <div className={css.rowHint}>{themeError}</div>}
+        {themeDraft !== null && (
+          <div className={css.subGroup}>
+            <div className={css.subHead}>
+              <span className={css.rowLabel}>{t('theme.generatePreview')}</span>
+              {themeDraft.pass
+                ? <span className={css.themeBadge}>{t('theme.generatePass')}</span>
+                : <span className={css.themeBadge}>{t('theme.generateFail')}</span>}
+            </div>
+            <div className={css.rowDesc}>{t('theme.draftHint')}</div>
+            <div className={css.swatchRow}>
+              {(['accent', 'secondary', 'surface', 'text'] as const).map(key => (
+                <span key={key} className={css.swatch} title={`${key} ${themeDraft.seeds[key]}`}>
+                  <span className={css.swatchColor} style={{ background: themeDraft.seeds[key] }} />
+                </span>
+              ))}
+            </div>
+            <div className={css.row}>
+              <button type="button" className={css.button} onClick={applyThemeDraft}>{t('theme.apply')}</button>
+              <button type="button" className={css.buttonGhost} onClick={() => setThemeDraft(null)}>{t('theme.generateCancel')}</button>
+            </div>
+          </div>
+        )}
+        {config.themes.list.length === 0 ? (
+          <div className={css.rowHint}>{t('theme.empty')}</div>
+        ) : (
+          config.themes.list.map(theme => {
+            const isActive = config.themes.active === theme.id
+            return (
+              <div key={theme.id} className={css.themeCard}>
+                {theme.sourceImage !== null && (
+                  <img className={css.preview} src={resolveImageSource(theme.sourceImage) ?? undefined} alt="" />
+                )}
+                <div className={css.themeMeta}>
+                  <span className={css.themeName}>
+                    {theme.name}
+                    {isActive && <span className={css.themeBadge}>{t('theme.active')}</span>}
+                  </span>
+                  {theme.description !== '' && <span className={css.themeDesc}>{theme.description}</span>}
+                </div>
+                {isActive ? (
+                  <button type="button" className={css.buttonGhost} onClick={() => update(prev => deactivateTheme(prev))}>
+                    {t('theme.deactivate')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={css.button}
+                    onClick={() => update(prev => {
+                      const found = findTheme(prev, theme.name)
+                      return found === undefined ? prev : activateTheme(prev, found)
+                    })}
+                  >
+                    {t('theme.apply')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={css.buttonDanger}
+                  onClick={() => {
+                    if (window.confirm(t('theme.removeConfirm', { name: theme.name }))) {
+                      update(prev => removeTheme(prev, theme.id))
+                    }
+                  }}
+                >
+                  {t('theme.remove')}
+                </button>
+              </div>
+            )
+          })
+        )}
       </div>
 
       <div className={css.group}>
@@ -564,12 +735,12 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
           <div className={css.swatchRow}>
             <button
               type="button"
-              className={`${css.swatch} ${shown.palette.preset === '' && shown.palette.accent === null ? css.swatchActive : ''}`}
+              className={`${css.swatch} ${shown.palette.preset === '' && paletteAccent === null ? css.swatchActive : ''}`}
               title={t('palette.none')}
               disabled={!isAll && (followCfg?.palette.follow ?? false)}
               onClick={() => {
-                if (isAll) setBase({ palette: { preset: '', accent: null } })
-                else setPanel({ palette: { follow: false, preset: '', accent: null } })
+                if (isAll) setBase({ palette: { preset: '', accent: null, seeds: null, appearance: null } })
+                else setPanel({ palette: { follow: false, preset: '', accent: null, seeds: null, appearance: null } })
               }}
             >
               <span className={css.swatchNone} />
@@ -578,30 +749,30 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
               <button
                 key={p.id}
                 type="button"
-                className={`${css.swatch} ${shown.palette.preset === p.id && shown.palette.accent === null ? css.swatchActive : ''}`}
+                className={`${css.swatch} ${shown.palette.preset === p.id && paletteAccent === null ? css.swatchActive : ''}`}
                 title={p.label}
                 disabled={!isAll && (followCfg?.palette.follow ?? false)}
                 onClick={() => {
-                  if (isAll) setBase({ palette: { preset: p.id, accent: null } })
-                  else setPanel({ palette: { follow: false, preset: p.id, accent: null } })
+                  if (isAll) setBase({ palette: { preset: p.id, accent: null, seeds: null, appearance: null } })
+                  else setPanel({ palette: { follow: false, preset: p.id, accent: null, seeds: null, appearance: null } })
                 }}
               >
-                <span className={css.swatchColor} style={{ background: p.light['--dsw-static-deepseek-500'] }} />
+                <span className={css.swatchColor} style={{ background: p.accent }} />
               </button>
             ))}
             <label
-              className={`${css.swatch} ${shown.palette.accent !== null ? css.swatchActive : ''} ${!isAll && (followCfg?.palette.follow ?? false) ? css.swatchDisabled : ''}`}
+              className={`${css.swatch} ${paletteAccent !== null ? css.swatchActive : ''} ${!isAll && (followCfg?.palette.follow ?? false) ? css.swatchDisabled : ''}`}
               title={t('palette.custom')}
             >
-              <span className={css.swatchColor} style={{ background: shown.palette.accent ?? '#888888' }} />
+              <span className={css.swatchColor} style={{ background: paletteAccent ?? '#888888' }} />
               <input
                 type="color"
                 className={css.colorInput}
-                value={shown.palette.accent ?? '#4d6bfe'}
+                value={paletteAccent ?? '#4d6bfe'}
                 disabled={!isAll && (followCfg?.palette.follow ?? false)}
                 onChange={(e) => {
-                  if (isAll) setBase({ palette: { preset: '', accent: e.target.value } })
-                  else setPanel({ palette: { follow: false, preset: '', accent: e.target.value } })
+                  if (isAll) setBase({ palette: { preset: '', accent: e.target.value, seeds: null, appearance: null } })
+                  else setPanel({ palette: { follow: false, preset: '', accent: e.target.value, seeds: null, appearance: null } })
                 }}
               />
             </label>

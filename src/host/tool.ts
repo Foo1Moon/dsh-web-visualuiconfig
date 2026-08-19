@@ -100,8 +100,9 @@ export function validateToolArgs(args: unknown): PersonalizationToolArgs {
   return out
 }
 
-/** Read a local image file, store it as an asset; throws descriptive errors. */
-async function storeLocalImage(path: string, assets: AssetStore): Promise<{ id: string }> {
+/** Read a local image file, store it as an asset; throws descriptive errors.
+ *  Shared with the character-theme tools (src/host/character-tool.ts). */
+export async function storeLocalImage(path: string, assets: AssetStore): Promise<{ id: string }> {
   const ext = extname(path).slice(1).toLowerCase()
   const mime = ext === 'jpg' || ext === 'jpeg'
     ? 'image/jpeg'

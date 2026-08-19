@@ -314,6 +314,53 @@
   cursor: pointer;
 }
 
+/* Character theme library: one card per saved theme. */
+.themeCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.themeMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.themeName {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.themeBadge {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-state-business-tertiary);
+  border-radius: 4px;
+  padding: 0 6px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.themeDesc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .footer {
   display: flex;
   justify-content: flex-end;

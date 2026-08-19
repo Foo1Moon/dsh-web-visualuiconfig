@@ -107,14 +107,20 @@ export function parsePersonalizationInput(raw: string): PersonalizationAction {
  *  personalization tool). */
 export function renderShow(snapshot: StoreSnapshot): string {
   const c = snapshot.config
-  const accent = c.base.palette.accent !== null
-    ? c.base.palette.accent
-    : c.base.palette.preset !== ''
-      ? `preset "${c.base.palette.preset}"`
-      : 'none'
+  const palette = c.base.palette
+  const accent = palette.seeds !== null
+    ? `seeds {${palette.seeds.accent} ${palette.seeds.secondary} ${palette.seeds.surface} ${palette.seeds.text}}${palette.appearance !== null ? ` (${palette.appearance})` : ''}`
+    : palette.accent !== null
+      ? palette.accent
+      : palette.preset !== ''
+        ? `preset "${palette.preset}"`
+        : 'none'
   const font = c.base.font.custom.trim() !== '' ? `custom: ${c.base.font.custom}` : c.base.font.family
   const background = c.base.background.mode === 'image' && c.base.background.image !== null
     ? c.base.background.image
+    : 'none'
+  const activeTheme = c.themes.active !== null
+    ? (c.themes.list.find(theme => theme.id === c.themes.active)?.name ?? c.themes.active)
     : 'none'
   return [
     `Personalization (revision ${snapshot.revision})`,
@@ -125,6 +131,7 @@ export function renderShow(snapshot: StoreSnapshot): string {
     `  font: ${font}`,
     `  background: ${background}`,
     `  global background: ${c.globalBackground.image !== null ? 'yes' : 'no'}`,
+    `  character theme: ${activeTheme}`,
     `  title: ${c.chrome.title ?? 'none'}`,
     '',
     USAGE,

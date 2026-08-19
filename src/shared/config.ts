@@ -46,6 +46,23 @@ export interface PanelBackgroundSettings {
   scrim: number
 }
 
+/**
+ * The four seed colours a whole palette is derived from (OKLab contrast-
+ * preserving derivation, see src/shared/derive.ts): accent + secondary are the
+ * two voices, surface is the page background (used verbatim), text anchors the
+ * far end of the neutral ramp.
+ */
+export interface PaletteSeeds {
+  /** The skin's voice: chat bubbles, the active sidebar item, the titlebar band. */
+  accent: string
+  /** The second voice: focus outlines, titlebar edges. */
+  secondary: string
+  /** The page background, used verbatim; every neutral step is solved against it. */
+  surface: string
+  /** Anchors the far end of the neutral ramp; hue and chroma survive. */
+  text: string
+}
+
 /** The appearance knobs one panel owns (the official token group it consumes). */
 export interface PanelConfig {
   /**
@@ -56,12 +73,24 @@ export interface PanelConfig {
   glass: {
     opacity: number
   }
-  /** Accent/palette selection: a preset id or a custom hex accent. */
+  /** Accent/palette selection: a preset id, a custom hex accent, or seeds. */
   palette: {
-    /** Selected preset id; '' means "use custom accent or none". */
+    /** Selected preset id; '' means "use seeds/accent/none". */
     preset: string
     /** Custom accent hex (#rrggbb), overrides preset when set. */
     accent: string | null
+    /**
+     * Full palette seeds (character themes). When set, the engine derives the
+     * whole `--dsw-static-*` ramp from these instead of the preset/accent
+     * fallbacks. Mutually exclusive with preset/accent (setting one clears the
+     * others).
+     */
+    seeds: PaletteSeeds | null
+    /**
+     * The colour scheme the seeds were derived for. Non-null pins the UI to
+     * that scheme while the seeds are active; null derives both schemes.
+     */
+    appearance: 'light' | 'dark' | null
   }
   /** Typography: font-family role selection. */
   font: {
@@ -85,7 +114,7 @@ export interface PanelConfig {
  */
 export interface PanelFollowConfig {
   glass: { follow: boolean; opacity: number }
-  palette: { follow: boolean; preset: string; accent: string | null }
+  palette: { follow: boolean; preset: string; accent: string | null; seeds: PaletteSeeds | null; appearance: 'light' | 'dark' | null }
   font: { follow: boolean; family: string; custom: string }
   scrollbar: { follow: boolean; value: boolean }
   selection: { follow: boolean; value: string | null }
@@ -95,7 +124,7 @@ export interface PanelFollowConfig {
 /** Default per-panel appearance (the official look untouched). */
 export const DEFAULT_PANEL_CONFIG: PanelConfig = Object.freeze({
   glass: { opacity: 0.55 },
-  palette: { preset: '', accent: null },
+  palette: { preset: '', accent: null, seeds: null, appearance: null },
   font: { family: 'default', custom: '' },
   scrollbar: false,
   selection: null,
@@ -106,7 +135,7 @@ export const DEFAULT_PANEL_CONFIG: PanelConfig = Object.freeze({
 export function defaultFollowConfig(): PanelFollowConfig {
   return structuredClone({
     glass: { follow: true, opacity: 0.55 },
-    palette: { follow: true, preset: '', accent: null },
+    palette: { follow: true, preset: '', accent: null, seeds: null, appearance: null },
     font: { follow: true, family: 'default', custom: '' },
     scrollbar: { follow: true, value: false },
     selection: { follow: true, value: null },
@@ -126,7 +155,12 @@ export function resolvePanelConfig(base: PanelConfig, follow: PanelFollowConfig)
     glass: { opacity: follow.glass.follow ? base.glass.opacity : follow.glass.opacity },
     palette: follow.palette.follow
       ? structuredClone(base.palette)
-      : { preset: follow.palette.preset, accent: follow.palette.accent },
+      : {
+        preset: follow.palette.preset,
+        accent: follow.palette.accent,
+        seeds: follow.palette.seeds === null ? null : structuredClone(follow.palette.seeds),
+        appearance: follow.palette.appearance,
+      },
     font: follow.font.follow
       ? structuredClone(base.font)
       : { family: follow.font.family, custom: follow.font.custom },
@@ -136,6 +170,80 @@ export function resolvePanelConfig(base: PanelConfig, follow: PanelFollowConfig)
       ? structuredClone(base.background)
       : { mode: follow.background.mode, image: follow.background.image, scrim: follow.background.scrim },
   }
+}
+
+/**
+ * The appearance sections a character theme may drive. A theme overlays these
+ * sections; deactivating it restores the snapshot captured at activation.
+ */
+export interface AppearanceSections {
+  /** The "all panels" baseline appearance. */
+  base: PanelConfig
+  /** One follow-capable appearance config per detectable panel. */
+  panels: Record<PanelId, PanelFollowConfig>
+  /** Page-wide backdrop. */
+  globalBackground: { image: string | null; scrim: number }
+  /** Page chrome: favicon and title. */
+  chrome: { favicon: string | null; title: string | null }
+}
+
+/** The appearance patch a character theme applies (a partial overlay). */
+export interface CharacterThemePatch {
+  base?: {
+    glass?: { opacity?: number }
+    palette?: {
+      preset?: string
+      accent?: string | null
+      seeds?: PaletteSeeds | null
+      appearance?: 'light' | 'dark' | null
+    }
+    font?: { family?: string; custom?: string }
+    scrollbar?: boolean
+    selection?: string | null
+    background?: { mode?: 'solid' | 'image'; image?: string | null; scrim?: number }
+  }
+  /** Optional per-panel overrides (a theme normally drives the baseline). */
+  panels?: Partial<Record<PanelId, Partial<PanelFollowConfig>>>
+  globalBackground?: { image?: string | null; scrim?: number }
+  chrome?: { favicon?: string | null; title?: string | null }
+}
+
+/** One saved character theme in the library. */
+export interface CharacterTheme {
+  /** Stable id (derived from the name; see {@link themeIdFromName}). */
+  id: string
+  /** Display name (usually the character name); the natural key for lookups. */
+  name: string
+  /** The character's introduction (truncated). */
+  description: string
+  /** Character art asset ref (`asset:<sha256>.<ext>`), or null. */
+  sourceImage: string | null
+  /**
+   * The palette seeds derived from the character (mirrored into
+   * `patch.base.palette.seeds` when the theme carries them), kept here for
+   * tooling/UI display.
+   */
+  seeds?: PaletteSeeds
+  /** The scheme the seeds were derived for, when the theme pins one. */
+  appearance?: 'light' | 'dark'
+  /** Creation timestamp (ms). */
+  createdAt: number
+  /** The appearance patch this theme applies when activated. */
+  patch: CharacterThemePatch
+  /**
+   * Appearance captured when the theme was activated, restored when the theme
+   * is deactivated or switched away — so one theme is effective at a time and
+   * turning theming off returns exactly to the pre-theme look.
+   */
+  snapshot: AppearanceSections | null
+}
+
+/** The character theme library: one active overlay + a saved list. */
+export interface CharacterThemeRegistry {
+  /** Currently active theme id, or null (theming off). */
+  active: string | null
+  /** Every saved theme, in creation order. */
+  list: CharacterTheme[]
 }
 
 /** The persisted configuration document. */
@@ -165,6 +273,8 @@ export interface PersonalizationConfig {
   base: PanelConfig
   /** One follow-capable appearance config per detectable panel. */
   panels: Record<PanelId, PanelFollowConfig>
+  /** The character theme library (see src/shared/theme.ts). */
+  themes: CharacterThemeRegistry
 }
 
 /** Default configuration (the page look untouched). */
@@ -183,7 +293,24 @@ export const DEFAULT_CONFIG: PersonalizationConfig = Object.freeze({
   chrome: { favicon: null, title: null },
   base: structuredClone(DEFAULT_PANEL_CONFIG) as PanelConfig,
   panels: Object.freeze(defaultPanels()),
+  themes: Object.freeze({ active: null, list: [] }),
 })
+
+/** Sanitize one palette-seeds value: four hex colours, or null. */
+function sanitizePaletteSeeds(raw: unknown): PaletteSeeds | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const s = raw as Record<string, unknown>
+  const pick = (key: string): string | null =>
+    typeof s[key] === 'string' && /^#[0-9a-f]{6}$/i.test(s[key] as string)
+      ? (s[key] as string).toLowerCase()
+      : null
+  const accent = pick('accent')
+  const secondary = pick('secondary')
+  const surface = pick('surface')
+  const text = pick('text')
+  if (accent === null || secondary === null || surface === null || text === null) return null
+  return { accent, secondary, surface, text }
+}
 
 /** Sanitize one panel appearance value. */
 function sanitizePanelConfig(raw: unknown): PanelConfig {
@@ -198,6 +325,9 @@ function sanitizePanelConfig(raw: unknown): PanelConfig {
     const p = r.palette as Record<string, unknown>
     if (typeof p.preset === 'string') base.palette.preset = p.preset
     if (typeof p.accent === 'string') base.palette.accent = p.accent
+    const seeds = sanitizePaletteSeeds(p.seeds)
+    if (seeds !== null) base.palette.seeds = seeds
+    if (p.appearance === 'light' || p.appearance === 'dark') base.palette.appearance = p.appearance
   }
   if (typeof r.font === 'object' && r.font !== null) {
     const f = r.font as Record<string, unknown>
@@ -219,7 +349,13 @@ function sanitizePanelConfig(raw: unknown): PanelConfig {
 function followFromPanel(pc: PanelConfig): PanelFollowConfig {
   return {
     glass: { follow: false, opacity: pc.glass.opacity },
-    palette: { follow: false, preset: pc.palette.preset, accent: pc.palette.accent },
+    palette: {
+      follow: false,
+      preset: pc.palette.preset,
+      accent: pc.palette.accent,
+      seeds: pc.palette.seeds === null ? null : structuredClone(pc.palette.seeds),
+      appearance: pc.palette.appearance,
+    },
     font: { follow: false, family: pc.font.family, custom: pc.font.custom },
     scrollbar: { follow: false, value: pc.scrollbar },
     selection: { follow: false, value: pc.selection },
@@ -242,6 +378,9 @@ function sanitizeFollowConfig(raw: unknown): PanelFollowConfig {
     if (typeof p.follow === 'boolean') base.palette.follow = p.follow
     if (typeof p.preset === 'string') base.palette.preset = p.preset
     if (typeof p.accent === 'string') base.palette.accent = p.accent
+    const seeds = sanitizePaletteSeeds(p.seeds)
+    if (seeds !== null) base.palette.seeds = seeds
+    if (p.appearance === 'light' || p.appearance === 'dark') base.palette.appearance = p.appearance
   }
   if (typeof r.font === 'object' && r.font !== null) {
     const f = r.font as Record<string, unknown>
@@ -271,6 +410,149 @@ function sanitizeFollowConfig(raw: unknown): PanelFollowConfig {
     if (typeof b.scrim === 'number') base.background.scrim = Math.min(1, Math.max(0, b.scrim))
   }
   return base
+}
+
+/**
+ * Derive a stable, ASCII-safe theme id from a display name. Deterministic (so
+ * the id survives restarts and browser reloads) and collision-resistant enough
+ * for a personal theme library; the name itself remains the natural key.
+ */
+export function themeIdFromName(name: string): string {
+  const key = name.trim().toLowerCase()
+  let hash = 5381
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) + hash + key.charCodeAt(i)) >>> 0
+  }
+  return `th-${hash.toString(36)}`
+}
+
+/** Sanitize one appearance patch field set (keeps known primitives only). */
+function sanitizeThemePatch(raw: Record<string, unknown>): CharacterThemePatch {
+  const out: CharacterThemePatch = {}
+  const b = raw.base
+  if (typeof b === 'object' && b !== null) {
+    const br = b as Record<string, unknown>
+    const base: NonNullable<CharacterThemePatch['base']> = {}
+    const g = br.glass
+    if (typeof g === 'object' && g !== null && typeof (g as Record<string, unknown>).opacity === 'number') {
+      base.glass = { opacity: Math.min(0.9, Math.max(0, ((g as Record<string, unknown>).opacity as number))) }
+    }
+    const p = br.palette
+    if (typeof p === 'object' && p !== null) {
+      const pr = p as Record<string, unknown>
+      const palette: NonNullable<NonNullable<CharacterThemePatch['base']>['palette']> = {}
+      if (typeof pr.preset === 'string') palette.preset = pr.preset
+      if (pr.accent === null || typeof pr.accent === 'string') palette.accent = pr.accent
+      const seeds = sanitizePaletteSeeds(pr.seeds)
+      if (seeds !== null) palette.seeds = seeds
+      if (pr.appearance === 'light' || pr.appearance === 'dark') palette.appearance = pr.appearance
+      if (Object.keys(palette).length > 0) base.palette = palette
+    }
+    const f = br.font
+    if (typeof f === 'object' && f !== null) {
+      const fr = f as Record<string, unknown>
+      const font: NonNullable<NonNullable<CharacterThemePatch['base']>['font']> = {}
+      if (typeof fr.family === 'string') font.family = fr.family
+      if (typeof fr.custom === 'string') font.custom = fr.custom
+      if (Object.keys(font).length > 0) base.font = font
+    }
+    if (typeof br.scrollbar === 'boolean') base.scrollbar = br.scrollbar
+    if (br.selection === null || typeof br.selection === 'string') base.selection = br.selection
+    const bg = br.background
+    if (typeof bg === 'object' && bg !== null) {
+      const bgr = bg as Record<string, unknown>
+      const background: NonNullable<NonNullable<CharacterThemePatch['base']>['background']> = {}
+      if (bgr.mode === 'solid' || bgr.mode === 'image') background.mode = bgr.mode
+      if (bgr.image === null || typeof bgr.image === 'string') background.image = bgr.image
+      if (typeof bgr.scrim === 'number') background.scrim = Math.min(1, Math.max(0, bgr.scrim))
+      if (Object.keys(background).length > 0) base.background = background
+    }
+    if (Object.keys(base).length > 0) out.base = base
+  }
+  const gb = raw.globalBackground
+  if (typeof gb === 'object' && gb !== null) {
+    const gbr = gb as Record<string, unknown>
+    const globalBackground: NonNullable<CharacterThemePatch['globalBackground']> = {}
+    if (gbr.image === null || typeof gbr.image === 'string') globalBackground.image = gbr.image
+    if (typeof gbr.scrim === 'number') globalBackground.scrim = Math.min(1, Math.max(0, gbr.scrim))
+    if (Object.keys(globalBackground).length > 0) out.globalBackground = globalBackground
+  }
+  const c = raw.chrome
+  if (typeof c === 'object' && c !== null) {
+    const cr = c as Record<string, unknown>
+    const chrome: NonNullable<CharacterThemePatch['chrome']> = {}
+    if (cr.favicon === null || typeof cr.favicon === 'string') chrome.favicon = cr.favicon
+    if (cr.title === null || typeof cr.title === 'string') chrome.title = cr.title
+    if (Object.keys(chrome).length > 0) out.chrome = chrome
+  }
+  const panels = raw.panels
+  if (typeof panels === 'object' && panels !== null) {
+    const pr = panels as Record<string, unknown>
+    const outPanels: NonNullable<CharacterThemePatch['panels']> = {}
+    for (const id of PANEL_IDS) {
+      const entry = pr[id]
+      if (typeof entry !== 'object' || entry === null) continue
+      outPanels[id] = entry as NonNullable<NonNullable<CharacterThemePatch['panels']>[PanelId]>
+    }
+    if (Object.keys(outPanels).length > 0) out.panels = outPanels
+  }
+  return out
+}
+
+/** Sanitize one saved character theme; null when the entry is unusable. */
+function sanitizeTheme(raw: unknown): CharacterTheme | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const r = raw as Record<string, unknown>
+  const name = typeof r.name === 'string' && r.name.trim() !== '' ? r.name.trim().slice(0, 64) : ''
+  if (name === '') return null
+  const id = typeof r.id === 'string' && /^[a-z0-9-]{1,64}$/i.test(r.id) ? r.id : themeIdFromName(name)
+  const description = typeof r.description === 'string' ? r.description.slice(0, 2000) : ''
+  const sourceImage = typeof r.sourceImage === 'string' ? r.sourceImage.slice(0, 4096) : null
+  const createdAt = typeof r.createdAt === 'number' && Number.isFinite(r.createdAt)
+    ? Math.floor(r.createdAt)
+    : Date.now()
+  const patch = typeof r.patch === 'object' && r.patch !== null
+    ? sanitizeThemePatch(r.patch as Record<string, unknown>)
+    : {}
+  const snapshot = typeof r.snapshot === 'object' && r.snapshot !== null
+    ? sanitizeAppearanceSections(r.snapshot)
+    : null
+  const seeds = sanitizePaletteSeeds(r.seeds)
+  const appearance = r.appearance === 'light' || r.appearance === 'dark' ? r.appearance : undefined
+  const out: CharacterTheme = { id, name, description, sourceImage, createdAt, patch, snapshot }
+  if (seeds !== null) out.seeds = seeds
+  if (appearance !== undefined) out.appearance = appearance
+  return out
+}
+
+/** Sanitize the appearance sections (theme snapshots). */
+function sanitizeAppearanceSections(raw: unknown): AppearanceSections {
+  const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+  const panels = defaultPanels()
+  const p = r.panels
+  if (typeof p === 'object' && p !== null) {
+    const pr = p as Record<string, unknown>
+    for (const id of PANEL_IDS) {
+      const entry = pr[id]
+      if (typeof entry !== 'object' || entry === null) continue
+      panels[id] = sanitizeFollowConfig(entry)
+    }
+  }
+  const globalBackground = { image: null as string | null, scrim: 0.25 }
+  const gb = r.globalBackground
+  if (typeof gb === 'object' && gb !== null) {
+    const gbr = gb as Record<string, unknown>
+    if (typeof gbr.image === 'string') globalBackground.image = gbr.image
+    if (typeof gbr.scrim === 'number') globalBackground.scrim = Math.min(1, Math.max(0, gbr.scrim))
+  }
+  const chrome = { favicon: null as string | null, title: null as string | null }
+  const c = r.chrome
+  if (typeof c === 'object' && c !== null) {
+    const cr = c as Record<string, unknown>
+    if (typeof cr.favicon === 'string') chrome.favicon = cr.favicon
+    if (typeof cr.title === 'string') chrome.title = cr.title
+  }
+  return { base: sanitizePanelConfig(r.base), panels, globalBackground, chrome }
 }
 
 /** Sanitize an unknown persisted value into a full config document. */
@@ -368,8 +650,10 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
             ? (r.palette as Record<string, unknown>).preset as string : '',
           accent: typeof (r.palette as Record<string, unknown>).accent === 'string'
             ? (r.palette as Record<string, unknown>).accent as string : null,
+          seeds: null,
+          appearance: null,
         }
-        : { preset: '', accent: null },
+        : { preset: '', accent: null, seeds: null, appearance: null },
       font: typeof r.font === 'object' && r.font !== null
         ? {
           family: typeof (r.font as Record<string, unknown>).family === 'string'
@@ -403,6 +687,23 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
       panel.background = { follow: true, mode: 'solid', image: null, scrim: entry.scrim }
     } else {
       panel.background = { follow: false, mode: 'solid', image: null, scrim: entry.scrim }
+    }
+  }
+  // The character theme library: sanitize every saved theme and drop a
+  // dangling active id (its theme was removed or malformed).
+  if (typeof r.themes === 'object' && r.themes !== null) {
+    const th = r.themes as Record<string, unknown>
+    const list: CharacterTheme[] = []
+    if (Array.isArray(th.list)) {
+      for (const item of th.list) {
+        const theme = sanitizeTheme(item)
+        if (theme !== null) list.push(theme)
+      }
+    }
+    const active = typeof th.active === 'string' ? th.active : null
+    base.themes = {
+      active: active !== null && list.some(theme => theme.id === active) ? active : null,
+      list,
     }
   }
   return base

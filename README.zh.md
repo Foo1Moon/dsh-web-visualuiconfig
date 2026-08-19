@@ -20,6 +20,7 @@
 | 页面外观 | favicon（≤128px 图）与页面标题覆盖 |
 | 面板级个性化 | 运行时检测当前存在的面板，「编辑目标」选单默认「全部面板」编辑基准外观（各面板的「跟随主题」开关继承它）；每个模块（面板透明度/主题色板/字体/滚动条/选中色/背景设置）都有「跟随主题」开关——单面板视图控制该面板该项，**「全部面板」视图批量控制所有面板的该项**；另有「全部跟随主题」总开关（两种视图都有）。当前面板：侧边栏、对话区、详情区、右侧文件/预览面板（aionui）、任务面板、SSH 面板 |
 | 配置存储 | 设置页「配置存储」小节选择配置保存位置：**跟随本机**（默认——宿主侧持久化到 `~/.dsh/dsh-web-personalization.json`，重启仍生效且**换浏览器也跟随**）或**仅此浏览器**（原始的 `localStorage` 行为）。背景图作为文件存于 `~/.dsh/personalization/`，以短同源 URL 提供，不再受 localStorage 配额与 2MB CSS `url()` 限制 |
+| 角色风格主题 | 给一张动漫角色图 + 一段角色介绍，agent 读图推导 **4 个色种**（accent/secondary/surface/text）+ 明暗 + 字体/透明度/滚动条/选中色/背景/标题，经 **OKLab 保对比度推导**（移植自 deepseek-harness-skin）生成整套 `--dsw-*` 色阶覆盖并应用。**两阶段确认制**：先给出 2-3 套候选方案与用户讨论，用户明确确认后才应用。主题存入库（`themes`），可随时切换/关闭/删除；关闭即还原启用前的官方外观 |
 
 ## 效果预览
 
@@ -70,6 +71,8 @@ dsh plugin --profile web add link:<克隆到的路径>
 - **Agent 工具**——模型从自然语言即可改主题（「把主题改成暖橙」「设这张图为背景」）：agent
   看到结构化参数的 `personalization` 工具（`accent` / `preset` / `transparency` / `font` /
   `storage` / `backgroundImage` / `removeBackground` / `enabled` / `reset`），调用即生效。
+  角色主题走 `character_theme`（应用/创建）与 `character_theme_manage`（list/switch/
+  deactivate/remove）两个工具，见下一节。
 - **HTTP**——完整接口：`GET|PUT|PATCH /personalization/config`、`POST /personalization/reset`、
   `PUT /personalization/assets`（原始图片字节，`Content-Type: image/jpeg|png|webp|gif`）。
   `PATCH` 深合并部分更新，agent/脚本只需发送改动字段：
@@ -84,14 +87,57 @@ dsh plugin --profile web add link:<克隆到的路径>
 - **服务**——其他插件 `inject: ['personalization']` 即可调用 `read()` / `update(patch)` /
   `reset()` / `onUpdated(cb)`。
 
+## 角色风格主题
+
+给出一张动漫角色图 + 该角色的介绍，就能把 DSH Web GUI 调成这个角色的风格：
+
+> 帮我用这张图做一个「芙莉莲」主题：图在 `C:\pics\frieren.png`。她是千年精灵魔法使，
+> 温柔、悠长、淡雅。
+
+agent 按**两阶段确认制（先提案、确认后才应用）**工作：
+
+1. `read_image` 读角色图、`read` 读介绍（**需要当前模型支持图像输入**）；
+2. **阶段一 · 提案（不应用）**：推导 **2-3 套候选方案**，每套切入点不同（发色 / 瞳色 / 服装…），
+   并完整给出：**4 个色种**（accent 取该切入点标志色，保证面板对比度；secondary 第二声音色；
+   surface 页面底色；text 文字色锚点）+ 明暗（appearance，激活时钉住界面明暗）、字体按性格
+   （可爱/软萌→`rounded`、优雅/古典→`serif`、冷酷/科技→`mono`）、透明度与遮罩按氛围、滚动条
+   与选中色是否随色板，以及一句气质总结；**默认不用角色图做背景**（整页角色图伤可读性，显式
+   要求 `background` 才用）、标题设为角色名。然后**把候选方案交给用户挑选**，此时不动界面；
+3. **阶段二 · 讨论与确认**：用户挑选一套或给出反馈（太暗/太粉/太圆润…），按反馈自动重推迭代，
+   **用户明确确认前绝不调用 `character_theme`**，界面不被改动；只有用户明确说「直接做吧/你定」
+   时才跳过提案、按单一推荐方案直接实施；
+4. **阶段三 · 实施**：确认后才调 `character_theme`（**seeds 优先于单一 accent**——引擎从 4 色种
+   保对比度推导整套色阶）应用并存入库；应用后仍可微调（主色/透明度/字体）或关闭还原，
+   `character_theme_manage` 可 list / switch / deactivate / remove。设置页的本地提取向导遵循
+   同一规则：先展示提取出的方案预览，用户确认后才应用。
+
+**引擎按 skin 纪律工作**：4 色种经 `deriveSkin` 在 OKLab 空间推导整套 73 级 `--dsw-static-*`
+色阶（中性阶复刻上游对比度、accent 阶钉住主阶），全部规则挂在 `html body[data-dsh-personal]`
+属性作用域下，**不碰任何布局结构规则**；全局背景走独立 fixed 层，不再写 body 内联样式。
+**可读性契约**（正文 4.5 / 描边 3 / 按钮文字 4.5 等）在推导时审计，不达标自动校正——「模型
+给的 accent 看不清」类问题从机制上消除。
+
+行为语义：
+
+- **同一时刻至多一个主题生效**：切换 A→B 整体替换 A 的外观；关闭（deactivate）还原到
+  启用前的官方外观，主题仍留在库里可再切换。
+- **同名重复应用 = 替换**该主题（patch 更新并重新激活）。
+- 主题图复用 sha256 资产存储（sourceImage）；删除主题后其图随 GC 清理。
+- 激活会把外观叠加烤进 `base/panels/globalBackground/chrome`——浏览器引擎直接生效，设置页
+  显示的就是生效后的值。
+- **设置页「个性化 → 角色主题」小节**：列出全部已保存主题（含角色图缩略图与介绍），可
+  直接「应用 / 关闭主题 / 删除」，与对话里的 `character_theme_manage` 完全等价（同一份
+  `themes` 文档）。
+
 ## 与皮肤体系的关系
 
-本插件与 `dsh-skins` 皮肤（如蓝色幻想）互不冲突：皮肤是整站换肤（含背景），本插件是可视化配置叠加层，二者都写入 body 属性作用域 CSS 与 body 内联样式；同时启用时以后写入者为准。关闭本插件的「启用个性化」开关即完整还原官方外观。
+本插件与 `dsh-skins` 皮肤（如蓝色幻想）互不冲突：皮肤是整站换肤（含背景），本插件是可视化配置叠加层，二者都以 **body 属性作用域 CSS** 工作（本插件挂在 `html body[data-dsh-personal]` 下，spec 特异性高于皮肤的 `body[data-dsh-<skin>]`），不写 body 内联样式。同时启用时以后写入者/更高特异性者为准。关闭本插件的「启用个性化」开关即完整还原官方外观。
 
 ## 开发
 
 ```sh
 pnpm install
+pnpm build:stock -- --harness <deepseek-harness-root>  # 生成 stock.generated.ts（升级 DSH 后重跑）
 pnpm build      # 产出 lib/index.js（宿主半区）与 lib/client.js（浏览器 bundle）
 pnpm watch      # 增量构建
 pnpm typecheck  # tsc --noEmit
@@ -107,16 +153,26 @@ src/host/assets.ts              # ~/.dsh/personalization/ 图片文件：sha256 
 src/host/routes.ts              # /personalization/* 路由、SSE 版本通道、uninstall 清理
 src/host/commands.ts            # /personalization 命令（经 ctx.inject 懒注册）
 src/host/tool.ts                # personalization agent 工具（经 ctx.inject 懒注册）
-src/host/patch.ts               # 部分更新的 deepMerge
+src/host/character-tool.ts      # character_theme / character_theme_manage 工具 + 推导指引
+src/host/patch.ts               # deepMerge 部分更新（re-export 共享实现，保历史路径）
 src/host/types.ts               # webServer/commands/personalization 服务的最小类型桥
-src/shared/config.ts            # 配置模型 + sanitize + storageMode + asset 引用（两个半区共用）
+src/shared/config.ts            # 配置模型 + sanitize + storageMode + asset 引用 + 主题库/色种类型
+src/shared/theme.ts             # 主题库纯逻辑：激活/切换/关闭/删除/快照还原/patch 构建
+src/shared/patch.ts             # deepMerge（环境无关，两个 bundle 内联）
+src/shared/color.ts             # OKLab/OKLCh 色彩数学（移植自 deepseek-harness-skin，MIT）
+src/shared/derive.ts            # 4 色种 → 全套 --dsw-* 色阶推导 + 可读性契约审计
+src/shared/extract.ts           # 像素取色（直方图 → 4 色种 + 明暗 + 极值）+ veil 自动调
+src/shared/render.ts            # 推导结果 → 属性作用域 CSS 文本
+src/shared/stock.ts             # 上游色板数据类型（StockStep/StockData）
+src/shared/stock.generated.ts   # 生成数据：73 阶色阶 + 89 语义别名（scripts/build-stock.mjs 产出）
 src/client/index.ts             # 浏览器半区：注册设置页、接线引擎与 host 同步（SSE）
-src/client/engine.ts            # 生效引擎：背景/色板/字体/滚动条/选中/chrome，可整体还原
+src/client/engine.ts            # 生效引擎：属性作用域推导色板/背景 fixed 层/字体/滚动条/选中/chrome
 src/client/settings.ts          # 共享模型之上的 localStorage 缓存（旧版迁移在 shared/config.ts）
 src/client/host.ts              # 浏览器 → host 传输层（fetch 封装）
 src/client/PersonalizationSection.tsx  # 设置页组件
 src/client/image.ts             # 图片压缩（canvas → JPEG data URL）
 src/client/locales.ts           # zh / en 文案
+scripts/build-stock.mjs         # 从本地 harness design-platform.css 生成 stock.generated.ts
 ```
 
 ## 已知限制
@@ -124,6 +180,20 @@ src/client/locales.ts           # zh / en 文案
 - 「仅此浏览器」模式下，配置只存浏览器 localStorage：换浏览器/换电脑不跟随；且 localStorage 配额（约 5MB）限制可保存的大背景图数量。默认的「跟随本机」模式下图片落盘，不受配额限制。
 - 背景图经短 `blob:` URL（data URL）或直接 host URL（`asset:` 引用）渲染：Chromium 的 CSS 解析器会静默丢弃超过 2MB 的 `url()` 值，因此引擎在 apply 时把存储的 data URL 解码为 Blob；host 资产是短同源 URL，天然不受此限制。
 - 宿主侧改动需要**重启 `dsh web`** 生效；重启前浏览器侧透明降级为仅浏览器存储。
+- 角色主题的对话路径**依赖模型图像能力**（`read_image`）：当前模型不支持图像输入时该工具
+  会报错提示切换图像模型；**设置页「从角色图生成」向导是无需模型的能力保底**（浏览器本地
+  提取 4 色种 + 保对比度推导，`src/client/character-wizard.ts`），同样**先展示方案预览、
+  用户确认后才应用**。
+- 主题激活期间的手动微调**不随主题保存**：关闭/切换主题会还原到该主题启用前的样子。
+- 钉住明暗（appearance）的角色主题会改写 `data-ds-dark-theme` 属性：主题生效期间切系统
+  明暗可能被主题覆盖，需重开主题或关闭后恢复。
+- 插件无宿主首帧注入（`tapIndex`）能力：主题在插件加载后才生效，首帧可能有短暂闪烁。
+- **诊断日志**：浏览器引擎每次应用配置都会把可疑参数（palette/glass/font/背景/明暗钉住）、
+  生成的 CSS 与实时布局实测节流上报到 `~/.dsh/personalization-diagnostics.jsonl`
+  （`POST /personalization/diagnostics`，保留最近 40 条）。复现布局问题时把该文件交给
+  agent 即可诊断。
+- `stock.generated.ts` 与 harness 的 `design-platform.css` 版本绑定：升级 DSH 后需重跑
+  `pnpm build:stock -- --harness <deepseek-harness-root>`（`--check` 可校验漂移）。
 - 「编辑目标」的面板列表在设置页挂载时检测一次：aionui 右侧面板在项目会话打开后才出现，需重开设置页才能选中它。
 - 面板透明度在「背景图」模式下效果最明显；纯色背景下效果较微弱（页面会给出提示）。
 - 皮肤与本插件同时启用时以后写入者为准；关闭「启用个性化」总开关可完整还原官方外观。

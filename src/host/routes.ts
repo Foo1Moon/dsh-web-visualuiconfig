@@ -10,16 +10,20 @@
  * validated before any disk access.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { dirname } from 'node:path'
 import type { PersonalizationConfig } from '../shared/config.ts'
 import { PANEL_IDS, parseAssetRef } from '../shared/config.ts'
 import type { AssetStore } from './assets.ts'
 import { ASSET_EXT_MIME, parseAssetFilename } from './assets.ts'
+import { appendDiagnostics } from './diagnostics.ts'
 import type { PersonalizationStore } from './store.ts'
 
 /** Config JSON body limit. */
 export const MAX_CONFIG_BODY_BYTES = 1024 * 1024
 /** Asset upload body limit. */
 export const MAX_ASSET_BODY_BYTES = 10 * 1024 * 1024
+/** Diagnostics report body limit. */
+export const MAX_DIAGNOSTICS_BODY_BYTES = 256 * 1024
 
 /** An HTTP-level error mapped to a status code by the dispatcher. */
 class HttpError extends Error {
@@ -41,6 +45,21 @@ export function collectAssetHashes(config: PersonalizationConfig): Set<string> {
   add(config.chrome.favicon)
   add(config.base.background.image)
   for (const id of PANEL_IDS) add(config.panels[id].background.image)
+  // The theme library: source art plus every image ref inside a theme's patch
+  // or snapshot — an inactive saved theme must survive the GC.
+  const scan = (value: unknown): void => {
+    if (typeof value === 'string') {
+      if (value.startsWith('asset:')) {
+        const ref = parseAssetRef(value)
+        if (ref !== null) hashes.add(ref.hash)
+      }
+      return
+    }
+    if (typeof value === 'object' && value !== null) {
+      for (const v of Object.values(value)) scan(v)
+    }
+  }
+  scan(config.themes)
   return hashes
 }
 
@@ -178,6 +197,19 @@ export function createPersonalizationRouter(
       if (pathname === '/personalization/uninstall') {
         if (method !== 'POST') throw new HttpError(405, 'method not allowed')
         await store.uninstall()
+        sendJson(res, 200, { ok: true })
+        return
+      }
+
+      // --- diagnostics ------------------------------------------------------
+      // The browser engine reports every applied config + emitted CSS + live
+      // layout measurements here (throttled client-side), so a reproduced
+      // layout bug can be diagnosed from ~/.dsh/personalization-diagnostics.jsonl.
+      if (pathname === '/personalization/diagnostics') {
+        if (method !== 'POST') throw new HttpError(405, 'method not allowed')
+        const input = await readJsonBody(req, MAX_DIAGNOSTICS_BODY_BYTES)
+        if (typeof input !== 'object' || input === null) throw new HttpError(400, 'diagnostics body must be an object')
+        await appendDiagnostics(dirname(store.filePath), input)
         sendJson(res, 200, { ok: true })
         return
       }

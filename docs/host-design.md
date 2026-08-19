@@ -1,7 +1,7 @@
 # dsh-web-visualuiconfig host 端设计文档
 
-> 状态：**阶段 1 + 阶段 3 已实现**（typecheck + build + 50 个测试全绿）。本文是 host 端开发的实现基准与后续阶段的文档锚点。
-> 最后更新：阶段 3（Agent 可编程）实现完成。
+> 状态：**阶段 1 + 阶段 3 + 角色风格主题 + skin 纪律重构已实现**（typecheck + build + 139 个测试全绿）。本文是 host 端开发的实现基准与后续阶段的文档锚点。
+> 最后更新：阶段 5（保对比度推导 + 引擎重写）实现完成。
 
 ## 1. 背景与动机
 
@@ -183,7 +183,7 @@ agent/命令改配置后所有打开的标签页自动刷新——这是 Broadca
 > 注：client/image.ts 未改动——压缩仍产出 data URL，由设置页在 host 模式下调用
 > `uploadImage()` 换为 `asset:` 引用；engine 的 data URL blob 路径保留（浏览器模式）。
 
-## 11. 测试（node:test + tsx，50 个用例全绿）
+## 11. 测试（node:test + tsx，139 个用例全绿）
 
 - `tests/host/store.spec.ts` — 读写回环、损坏文件→备份+默认、revision 递增、并发写串行化、
   reset、uninstall
@@ -196,6 +196,20 @@ agent/命令改配置后所有打开的标签页自动刷新——这是 Broadca
   （含本地图片文件路径、错误路径、reset）
 - `tests/host/tool.spec.ts` — 工具参数校验（归一化/拒绝）、execute 全操作（组合 patch、
   无参摘要、本地背景图、错误路径、reset、removeBackground）
+- `tests/host/character-tool.spec.ts` — 角色主题工具：参数校验、apply（资产落盘 + 配置叠加 +
+  主题库回环）、同名替换、无决策/背景缺图报错、manage list/switch/deactivate/remove 往返、
+  主题生命周期资产 GC
+- `tests/shared/theme.spec.ts` — 共享主题层纯逻辑：patch 构建（accent/preset/seeds 互斥、
+  null 清除、背景/favicon 引用）、激活快照、切换覆盖、关闭还原、删除、findTheme、sanitize
+  回环与 dangling active 丢弃
+- `tests/shared/color.spec.ts` — OKLab 转换链回环、gamut 拟合、WCAG 对比度锚点（移植自
+  deepseek-harness-skin）
+- `tests/shared/derive.spec.ts` — 4 色种推导（表面钉住/契约全过/中性阶有序/band 前景/veil
+  阶梯/亮暗校正）、bent-stock 边界、resolveToken、auditSkin（移植）
+- `tests/shared/extract.spec.ts` — 像素取色（明暗/表面保持/辅色/极值/透明像素/拒绝空图）、
+  veil 自动调（默认/抬升/天花板失败）（移植）
+- `tests/shared/render.spec.ts` — 属性作用域 CSS 生成（作用域/seeds 注释/可选字段/排序）
+  （移植）
 - `tests/client/shared.spec.ts` — sanitize（storageMode 默认/保留、剥离、legacy 迁移）、
   asset ref 解析
 - `tests/client/engine.spec.ts` — jsdom：asset 背景渲染为短 URL、data URL 走 blob、
@@ -229,6 +243,121 @@ agent/命令改配置后所有打开的标签页自动刷新——这是 Broadca
 > 命令 DSL 与工具的参数 id 同源（`commands.ts` 导出的 PRESET_IDS / FONT_IDS，与客户端
 > 引擎的 PALETTE_PRESETS / FONT_PRESETS 镜像，host 不 import 客户端代码）。
 
+## 12.1 阶段 4 已实现：角色风格主题
+
+用户给一张动漫角色图 + 一段角色介绍，agent 读图推导主题并应用，产出符合角色风格的
+DSH UI。模型是语义引擎（`read_image` 读图 + `read` 读介绍 + 推导决策），插件负责校验、
+落资产、叠加、入库。
+
+### 配置模型（`src/shared/config.ts`）
+
+```
+config.themes = {
+  active: string | null,        // 当前激活的主题 id（同一时刻至多一个生效）
+  list: CharacterTheme[],       // 主题库
+}
+CharacterTheme = {
+  id            // th-<djb2(name)>：确定性、ASCII 安全，重启/换浏览器不变
+  name          // 显示名（角色名），查找的自然键
+  description   // 角色介绍（截断 2000）
+  sourceImage   // 角色图 asset 引用（复用 sha256 资产存储）
+  createdAt
+  patch         // 外观叠加补丁（base/panels/globalBackground/chrome，deepMerge 语义）
+  snapshot      // 激活时捕获的外观快照（base/panels/globalBackground/chrome）
+}
+```
+
+### 语义（`src/shared/theme.ts`，纯函数，两个半区共用）
+
+- **同一时刻至多一个主题生效**。激活 = 先还原上一个激活主题的快照 → 捕获当前外观为新
+  快照 → 叠加本主题 patch → 标记 active。切换 A→B 即整体替换；再切回 A 重新应用 A 的
+  patch。
+- **关闭 = 还原快照**：回到该主题启用前的外观（官方外观），主题仍留在库里可再切换。
+- **删除激活中的主题**：先还原其快照再移除。
+- **已知限制**：主题激活期间的手动微调不随主题保存——关闭/切换主题会还原到启用前的样子。
+- **引擎零改动**：激活把叠加结果烤进 `base/panels/globalBackground/chrome`，引擎照常应用；
+  浏览器半区通过 sanitize 自动获得 `themes` 字段。
+
+### 工具（`src/host/character-tool.ts`，经 `ctx.inject(['tools','systemPrompt'])` 懒注册）
+
+- `character_theme`：apply/创建主题。参数 name（必填，自然键，同名即替换）/ description /
+  imagePath（存 asset）/ accent / preset / font / transparency / scrollbar / selection /
+  background（用角色图做整页背景，默认 false）/ scrim / favicon / title。无图且无任何外观
+  决策时报错；background/favicon 需要 imagePath。
+- `character_theme_manage`：action list（默认）/ switch / deactivate / remove（后两者需
+  name）。list 返回主题清单（含 [active] 标记与描述摘要）。
+- **system prompt 指引**（`tool:character-theme`，order 112）：教模型如何从角色图+介绍推导
+  主题——accent 取角色标志色（发/眼/服装）并保证对比度；preset 取最接近的色板；font 按
+  性格（可爱→rounded、优雅→serif、冷酷/科技→mono）；transparency/scrim 按氛围；默认
+  background=false（整页角色图伤可读性）；title 设为角色名。
+
+### 资产 GC
+
+`collectAssetHashes` 除既有字段外，递归扫描 `config.themes`（sourceImage + patch/snapshot
+内所有 `asset:` 引用）——未激活的已保存主题图不会被误删；主题删除后随 GC 清理。
+
+### 设置页管理（浏览器半区）
+
+设置页「个性化 → 角色主题」小节（`PersonalizationSection.tsx`）列出全部已保存主题：角色图
+缩略图、名称、介绍、[应用 / 关闭主题 / 删除]。操作直接调用 `src/shared/theme.ts` 的纯函数
+（`activateTheme` / `deactivateTheme` / `removeTheme`，经 `findTheme` 定位），与 agent 工具
+读写同一份 `themes` 文档——浏览器 PUT 与 host 工具在 sanitize 下天然一致。共享层函数因此
+被内联进客户端 bundle（`shared/theme.ts` + `shared/patch.ts` 均为环境无关纯 JS）。
+
+小节顶部是**「从角色图生成」向导**（`src/client/character-wizard.ts`）：上传角色图 →
+`compressImage` 压缩（复用既有管线）→ 96px 采样 RGBA → `analyzeImagePixels`
+（`extractPalette` + `tuneCustomSkin`，纯函数可单测）→ 上传压缩图作资产 → 以 4 色种 +
+明暗构建主题并激活。**无模型能力保底**：对话路径在非图像模型下失效时，向导仍可生成种子
+主题；可读性审计（`pass`/`veil`）在 `tuneCustomSkin` 内自动完成。
+
+## 12.2 阶段 5 已实现：保对比度推导 + 引擎重写（skin 纪律）
+
+按 deepseek-harness-skin 的纪律重构（决策：引擎按纪律重写 / stock 带生成脚本 / 双轨取色）。
+
+### 移植的纯函数层（`src/shared/`，全部环境无关、MIT 注明出处）
+
+- `color.ts` — OKLab/OKLCh 数学（转换链、gamut 二分、WCAG 亮度/对比度、rgba/复合）。
+- `derive.ts` — 4 色种 → 整套 73 级 `--dsw-static-*` 色阶 + brand 角色：中性阶**复刻上游
+  对比度**（不是绝对亮度），accent 阶分段重映射钉住主阶；`auditSkin` 8 项可读性契约。
+- `extract.ts` — 确定性取色：RGBA 直方图分桶 → 4 色种 + 明暗 + 明暗极值；`tuneCustomSkin`
+  自动上调 veil 直到正文对「照片极值复合」达标。
+- `render.ts` — 推导结果 → `body[data-dsh-skin]` 属性作用域 CSS。
+- `stock.ts` / `stock.generated.ts` — 上游色板数据（73 阶 + 89 语义别名，OKLCh 快照）。
+
+### 生成脚本（`scripts/build-stock.mjs` + `pnpm build:stock`）
+
+从本地 harness 的 `design-platform.css` 提取（`--harness <root>` / `--css <path>` /
+`DSH_HARNESS`），产出 `src/shared/stock.generated.ts`；内置 derive+audit smoke 门禁与
+`--check` 防漂移。升级 DSH 后需重跑。
+
+### 配置模型（`shared/config.ts`）
+
+- `PaletteSeeds {accent, secondary, surface, text}`；`PanelConfig.palette` 与
+  `PanelFollowConfig.palette` 新增 `seeds` + `appearance`（`'light'|'dark'|null`）。
+- 4 个内置预设改为**每明暗一套 seeds**（引擎推导两套色板，浏览器按 `data-ds-dark-theme`
+  选择）；角色主题携带单一 seeds + 钉住明暗。
+- 三者互斥：设置 accent/preset/seeds 任一都会清掉其余（`buildThemePatch` / 设置页均显式
+  置 null）。
+
+### 引擎重写（`client/engine.ts`）
+
+- **属性作用域**：全部规则挂 `html body[data-dsh-personal]`（+ `[data-ds-dark-theme]` 明暗
+  变体），spec 高于皮肤体系的 `body[data-dsh-<skin>]`；摘属性即完整还原。
+- **推导色板**：base/seeds 经 `deriveSkin`（按 seeds+scheme 缓存）生成全套 token 覆盖，
+  替换旧的 color-mix accentGroup（保留为纯 accent 快捷路径）；面板级 palette 同级覆盖。
+- **钉住明暗**：seeds 主题带 appearance 时改写 body 的 `data-ds-dark-theme`（皮肤同款语义），
+  dispose 还原。
+- **背景独立 fixed 层**：全局背景改为 `z-index:-1` 的 fixed div（含 scrim 变量），**不再写
+  body 内联样式、无 `background-attachment: fixed`**；`[id=root]{background:0 0}` 结构 hack
+  替换为仅当全局背景激活时输出的作用域 `background:transparent` 规则；面板 scrim 变量移入
+  面板作用域规则（不再写 body）。
+- **可读性契约**：推导即审计，`fitAccent` 自动校正（「accent 看不清」类 bug 从机制上消除）。
+
+### 验证
+
+typecheck / build / **139 个测试全绿**（新增 color/derive/extract/render 移植套件 57 例 +
+引擎重写用例、seeds sanitize/工具/设置页用例）；`build:stock --check` 无漂移。
+
 ## 13. 风险清单
 
 - 路由路径冲突：`/personalization` 干净，无冲突。
@@ -241,6 +370,15 @@ agent/命令改配置后所有打开的标签页自动刷新——这是 Broadca
 
 ## 14. 修订历史
 
+- v8（取色向导）：`src/client/character-wizard.ts`（analyzeImagePixels 纯分析 +
+  samplePixelsFromDataUrl DOM 采样）；设置页「从角色图生成」UI + locale；测试增至 142。
+- v7（skin 纪律重构）：移植 color/derive/extract/render + stock 生成脚本（`pnpm build:stock`）；
+  配置模型引入 4 色种 seeds + appearance；引擎重写为属性作用域推导色板 + 背景 fixed 层 +
+  明暗钉住，移除结构规则与 body 内联背景；`character_theme` 支持 seeds；测试增至 139。
+- v6（角色风格主题已实现）：`config.themes` 主题库（多主题、单激活、快照还原）；
+  `src/shared/theme.ts` 纯函数层 + `src/shared/patch.ts`（deepMerge 上移共享，host 侧
+  re-export 保路径）；`character_theme` / `character_theme_manage` 工具与推导指引；
+  `collectAssetHashes` 纳入主题引用；`renderShow` 显示当前主题；测试增至 76。
 - v5（agent 工具已实现）：`personalization` tool（`src/host/tool.ts`，裸定义 + 已编译 JSON
   Schema，懒注入 tools/systemPrompt）；`PRESET_IDS/FONT_IDS/renderShow` 从 commands 导出复用；
   测试增至 58。

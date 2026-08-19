@@ -14,6 +14,24 @@ export type PersonalizationKey =
   | 'storage.hostUnavailable'
   | 'master.title'
   | 'master.desc'
+  | 'theme.title'
+  | 'theme.desc'
+  | 'theme.empty'
+  | 'theme.active'
+  | 'theme.apply'
+  | 'theme.deactivate'
+  | 'theme.remove'
+  | 'theme.removeConfirm'
+  | 'theme.generate'
+  | 'theme.generateBusy'
+  | 'theme.generateHint'
+  | 'theme.generateName'
+  | 'theme.generateFailed'
+  | 'theme.generatePreview'
+  | 'theme.generateCancel'
+  | 'theme.generatePass'
+  | 'theme.generateFail'
+  | 'theme.draftHint'
   | 'scope.title'
   | 'scope.desc'
   | 'scope.all'
@@ -71,6 +89,24 @@ export const zh: Record<PersonalizationKey, string> = {
   'storage.hostUnavailable': '主机存储当前不可用（插件宿主侧可能尚未加载，请重启 dsh web），已临时回退为仅保存在当前浏览器',
   'master.title': '启用个性化',
   'master.desc': '关闭后立即还原官方外观',
+  'theme.title': '角色主题',
+  'theme.desc': '由角色图 + 介绍生成的主题库，同一时刻至多一个生效；关闭后还原启用前的外观',
+  'theme.empty': '还没有角色主题。可以上传角色图自动生成，或在对话里给 agent 一张角色图和一段介绍（例如「用这张图做一个芙莉莲主题」）',
+  'theme.active': '当前生效',
+  'theme.apply': '应用',
+  'theme.deactivate': '关闭主题',
+  'theme.remove': '删除',
+  'theme.removeConfirm': '删除角色主题「{name}」？',
+  'theme.generate': '从角色图生成',
+  'theme.generateBusy': '生成中…',
+  'theme.generateHint': '上传一张角色图，浏览器自动提取主色并保对比度推导整套配色；先预览方案，确认满意后再应用（原图不出本机）',
+  'theme.generateName': '主题名称',
+  'theme.generateFailed': '生成失败：',
+  'theme.generatePreview': '生成方案预览',
+  'theme.generateCancel': '取消',
+  'theme.generatePass': '可读性校验通过',
+  'theme.generateFail': '可读性校验未通过',
+  'theme.draftHint': '这是提取出的配色方案，尚未应用——确认满意后再点击「应用」',
   'scope.title': '编辑目标',
   'scope.desc': '默认「全部面板」统一调整；也可选择某个面板单独调整它的个性化内容',
   'scope.all': '全部面板',
@@ -129,6 +165,24 @@ export const en: Record<PersonalizationKey, string> = {
   'storage.hostUnavailable': 'Host storage is unavailable right now (the plugin host half may not be loaded; restart dsh web), temporarily falling back to this browser only',
   'master.title': 'Enable personalization',
   'master.desc': 'Turning this off restores the official look immediately',
+  'theme.title': 'Character themes',
+  'theme.desc': 'Themes generated from character art + introduction; at most one is active at a time — turning it off restores the pre-theme look',
+  'theme.empty': 'No character themes yet. Upload a character image below to generate one, or give the agent an image and a short introduction in chat (e.g. "build a Frieren theme from this image")',
+  'theme.active': 'Active',
+  'theme.apply': 'Apply',
+  'theme.deactivate': 'Turn off',
+  'theme.remove': 'Delete',
+  'theme.removeConfirm': 'Delete character theme "{name}"?',
+  'theme.generate': 'Generate from image',
+  'theme.generateBusy': 'Generating…',
+  'theme.generateHint': 'Upload a character image; the browser extracts the palette and derives the whole contrast-preserving ramp locally. You get a preview first — confirm it before it is applied (the image never leaves this machine)',
+  'theme.generateName': 'Theme name',
+  'theme.generateFailed': 'Generation failed: ',
+  'theme.generatePreview': 'Generated scheme preview',
+  'theme.generateCancel': 'Cancel',
+  'theme.generatePass': 'Contrast check passed',
+  'theme.generateFail': 'Contrast check failed',
+  'theme.draftHint': 'This is the extracted palette — nothing has been applied yet. Confirm it looks right, then click Apply.',
   'scope.title': 'Edit target',
   'scope.desc': 'Default is "all panels" adjusted uniformly; pick one panel to restyle it independently',
   'scope.all': 'All panels',

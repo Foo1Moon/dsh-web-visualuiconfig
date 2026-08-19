@@ -19,6 +19,7 @@ import type { Context } from '@deepseek-ai/cordis'
 // only the members it uses).
 import type {} from './host/types.ts'
 import { AssetStore } from './host/assets.ts'
+import { registerCharacterThemeTools } from './host/character-tool.ts'
 import { registerPersonalizationCommand } from './host/commands.ts'
 import { createPersonalizationRouter } from './host/routes.ts'
 import { PersonalizationStore } from './host/store.ts'
@@ -66,11 +67,17 @@ export function apply(ctx: Context): void {
     ctx.effect(() => () => disposeCommand(), 'personalization: /personalization command')
   })
 
-  // The model-facing tool: lets the agent change the appearance from natural
-  // language. Registered only when the tools + systemPrompt services are
-  // present (base bundle) — never blocks this plugin's apply.
+  // The model-facing tools: the `personalization` tool changes the appearance
+  // from natural language, and the character-theme pair builds a full GUI
+  // theme from a character's art + introduction. Registered only when the
+  // tools + systemPrompt services are present (base bundle) — never blocks
+  // this plugin's apply.
   ctx.inject(['tools', 'systemPrompt'], (toolsCtx) => {
     const disposeTool = registerPersonalizationTool(toolsCtx.tools, toolsCtx.systemPrompt, store, assets)
-    ctx.effect(() => () => disposeTool(), 'personalization: personalization tool')
+    const disposeCharacterTools = registerCharacterThemeTools(toolsCtx.tools, toolsCtx.systemPrompt, store, assets)
+    ctx.effect(() => () => {
+      disposeTool()
+      disposeCharacterTools()
+    }, 'personalization: personalization + character-theme tools')
   })
 }

@@ -3,3 +3,7 @@ lib/
 *.tsbuildinfo
 *.log
 *.tgz
+
+# Browser-automation scratch dirs / logs (local dev only)
+.chrome-tmp*/
+*.log.err
