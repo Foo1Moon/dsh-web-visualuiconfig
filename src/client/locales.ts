@@ -62,6 +62,8 @@ export type PersonalizationKey =
   | 'palette.title'
   | 'palette.custom'
   | 'palette.none'
+  | 'preset.group.skin'
+  | 'preset.group.catppuccin'
   | 'font.title'
   | 'font.custom'
   | 'scrollbar.title'
@@ -137,6 +139,8 @@ export const zh: Record<PersonalizationKey, string> = {
   'palette.title': '主题色',
   'palette.custom': '自定义',
   'palette.none': '跟随官方',
+  'preset.group.skin': '预设皮肤',
+  'preset.group.catppuccin': 'Catppuccin',
   'font.title': '字体',
   'font.custom': '自定义字体栈（CSS font-family）',
   'scrollbar.title': '自定义滚动条',
@@ -213,6 +217,8 @@ export const en: Record<PersonalizationKey, string> = {
   'palette.title': 'Accent color',
   'palette.custom': 'Custom',
   'palette.none': 'Official',
+  'preset.group.skin': 'Preset skins',
+  'preset.group.catppuccin': 'Catppuccin',
   'font.title': 'Typography',
   'font.custom': 'Custom font stack (CSS font-family)',
   'scrollbar.title': 'Custom scrollbar',

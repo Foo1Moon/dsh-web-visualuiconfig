@@ -13,7 +13,7 @@
 | 背景设置 | 每个面板（「全部面板」与单面板统一）都有「背景设置」：**纯色背景**（默认，面板显示底色，透明度仍可调半透明效果）或**背景图**（上传图按面板宽高比自动裁剪，渲染在该面板层级，遮罩可调）。「全部面板」上传是**源图桥**：只压缩不裁剪，各面板渲染时按自身宽高比 cover 裁剪；面板是否显示它取决于自身背景的「跟随主题」开关（存在独立背景的面板会给出提示） |
 | 全局背景 | 编辑目标之外的页面级分组：整页**底层**背景图（渲染在 body），与各面板背景独立；面板没有自己的背景图时透出它，面板有自定义背景图时盖住它 |
 | 面板透明度 | 0–0.9 滑块：0 = 官方不透明（背景图被面板完全遮住），向右面板越透明、背景图越透出；浮层（菜单/弹窗/输入）保持更高不透明度保证可读。不做 `backdrop-filter`：官方列容器上的 blur 会困住 fixed 浮层（设置弹窗等），这是 dsh-web-ui 皮肤体系验证过的边界 |
-| 主题色板 | 4 个预设（海洋青 / 紫罗兰 / 暖橙 / 玫瑰红）+ 自定义 accent（`color-mix` 派生全档位），覆盖 `--dsw-static-deepseek-*` 与 aionui 面板的 `--aion-*` token，亮/暗自动适配 |
+| 主题色板 | 29 个预设：4 内置（海洋青 / 紫罗兰 / 暖橙 / 玫瑰红）+ 21 套角色皮肤（初音未来、原神、火影、鸣潮、恋与深空…，seeds 源自 deepseek-harness-skin，单明暗皮肤自动补对侧中性变体）+ 4 套 Catppuccin（Latte / Frappé / Macchiato / Mocha）；另支持自定义 accent（`color-mix` 派生全档位），覆盖 `--dsw-static-deepseek-*` 与 aionui 面板的 `--aion-*` token，亮/暗自动适配 |
 | 字体 | 圆润 / 衬线 / 等宽预设，或自定义 `font-family` 栈 |
 | 滚动条 | 圆角滚动条，亮/暗两套配色 |
 | 选中色 | 自定义 `::selection` 背景色 |
@@ -82,7 +82,7 @@ dsh plugin --profile web add link:<克隆到的路径>
     http://127.0.0.1:3080/personalization/config
   ```
 - **命令**——对话输入框直接敲 `/personalization`（不经模型）：`show`、`set accent #hex`、
-  `set preset ocean|violet|ember|rose`、`set glass 0-0.9`、`set font default|rounded|serif|mono`、
+  `set preset <id>`（29 个预设 id，见设置页主题色卡）、`set glass 0-0.9`、`set font default|rounded|serif|mono`、
   `set storage host|browser`、`background set <本地图片路径>`、`background remove`、`reset`。
 - **服务**——其他插件 `inject: ['personalization']` 即可调用 `read()` / `update(patch)` /
   `reset()` / `onUpdated(cb)`。
@@ -157,6 +157,7 @@ src/host/character-tool.ts      # character_theme / character_theme_manage 工�
 src/host/patch.ts               # deepMerge 部分更新（re-export 共享实现，保历史路径）
 src/host/types.ts               # webServer/commands/personalization 服务的最小类型桥
 src/shared/config.ts            # 配置模型 + sanitize + storageMode + asset 引用 + 主题库/色种类型
+src/shared/presets.ts           # 预设主题目录：4 内置 + 21 皮肤（deepseek-harness-skin）+ 4 Catppuccin
 src/shared/theme.ts             # 主题库纯逻辑：激活/切换/关闭/删除/快照还原/patch 构建
 src/shared/patch.ts             # deepMerge（环境无关，两个 bundle 内联）
 src/shared/color.ts             # OKLab/OKLCh 色彩数学（移植自 deepseek-harness-skin，MIT）

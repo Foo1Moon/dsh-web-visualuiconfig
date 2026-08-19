@@ -13,7 +13,7 @@ A standalone, hot-pluggable DeepSeek Harness (DSH) Web GUI plugin that layers sw
 | Background settings | Every panel (unified between the "all panels" and single-panel targets) has its own background group: **solid color** (default — the panel shows its base color, transparency still applies) or **image** (rendered at the panel's layer, center-cropped to the panel's aspect ratio, scrim adjustable). The "all panels" upload is a **source bridge**: it only compresses, never crops — each panel crops via `background-size: cover` at render time and shows it only while its background knob follows the baseline (panels with an independent background get a hint) |
 | Global background | A page-level group outside the edit target: a page-wide **bottom-layer** backdrop (rendered on body), independent of panel backgrounds — panels without their own image show it through, panels with their own image cover it |
 | Panel transparency | 0–0.9 slider: 0 = official opaque (the backdrop is fully covered), right = more transparent and the backdrop shows through; floating layers (menu/dialog/input) stay more opaque for readability. No `backdrop-filter`: blur on the official frame columns traps fixed overlays (the settings modal etc.), a boundary the dsh-web-ui skin system documents |
-| Accent palette | 4 presets (Ocean / Violet / Ember / Rose) plus a custom hex accent (`color-mix` derives the full ramp), overriding `--dsw-static-deepseek-*` and the aionui panel's `--aion-*` tokens; light/dark auto-adapt |
+| Accent palette | 29 presets: 4 built-in (Ocean / Violet / Ember / Rose) + 21 character skins (Hatsune Miku, Genshin, Naruto, Wuthering Waves, Love&Deepspace …; seeds from deepseek-harness-skin, single-scheme skins get a neutral opposite-scheme variant) + 4 Catppuccin flavors (Latte / Frappé / Macchiato / Mocha); plus a custom hex accent (`color-mix` derives the full ramp), overriding `--dsw-static-deepseek-*` and the aionui panel's `--aion-*` tokens; light/dark auto-adapt |
 | Typography | Rounded / Serif / Mono presets, or a custom `font-family` stack |
 | Scrollbar | Rounded scrollbar, light/dark palettes |
 | Selection color | Custom `::selection` background |
@@ -75,7 +75,7 @@ Four ways to drive the settings without the GUI (every change is broadcast to al
     -d '{"base":{"palette":{"accent":"#ff8800"}}}' \
     http://127.0.0.1:3080/personalization/config
   ```
-- **Command** — `/personalization` in the chat input (no model round-trip): `show`, `set accent #hex`, `set preset ocean|violet|ember|rose`, `set glass 0-0.9`, `set font default|rounded|serif|mono`, `set storage host|browser`, `background set <local image path>`, `background remove`, `reset`.
+- **Command** — `/personalization` in the chat input (no model round-trip): `show`, `set accent #hex`, `set preset <id>` (any of the 29 catalog ids), `set glass 0-0.9`, `set font default|rounded|serif|mono`, `set storage host|browser`, `background set <local image path>`, `background remove`, `reset`.
 - **Service** — other plugins `inject: ['personalization']` to call `read()`, `update(patch)`, `reset()`, `onUpdated(cb)`.
 
 ## Character themes
@@ -131,6 +131,7 @@ src/host/character-tool.ts      # character_theme / character_theme_manage tools
 src/host/patch.ts               # deepMerge for partial config updates (re-exports the shared impl)
 src/host/types.ts               # minimal type bridges for webServer/commands/personalization services
 src/shared/config.ts            # config model + sanitize + storageMode + asset refs + theme/seeds types
+src/shared/presets.ts           # preset catalog: 4 builtin + 21 skins (deepseek-harness-skin) + 4 Catppuccin
 src/shared/theme.ts             # theme library logic: activate/switch/deactivate/remove/snapshot/patch
 src/shared/patch.ts             # deepMerge (environment-agnostic, inlined into both bundles)
 src/shared/color.ts             # OKLab/OKLCh colour math (ported from deepseek-harness-skin, MIT)

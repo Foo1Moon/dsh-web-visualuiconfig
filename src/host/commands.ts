@@ -2,7 +2,7 @@
  * The `/personalization` human-facing command: show or change the machine
  * personalization settings from the chat input, without touching the model.
  *
- * DSL: `show` (default), `set accent #hex`, `set preset ocean|violet|ember|rose`,
+ * DSL: `show` (default), `set accent #hex`, `set preset <id>` (any catalog id),
  * `set glass 0-0.9`, `set font default|rounded|serif|mono`,
  * `set storage host|browser`, `background set <image path>`, `background remove`,
  * `reset`. The parsing is a pure function so the grammar is unit-testable;
@@ -15,9 +15,9 @@ import type { AssetStore } from './assets.ts'
 import { MAX_ASSET_BODY_BYTES, collectAssetHashes } from './routes.ts'
 import type { PersonalCommandResult } from './types.ts'
 import type { StoreSnapshot, PersonalizationStore } from './store.ts'
+import { PRESET_IDS } from '../shared/presets.ts'
 
-/** The accepted preset ids (mirrors PALETTE_PRESETS in the client engine). */
-export const PRESET_IDS: readonly string[] = Object.freeze(['ocean', 'violet', 'ember', 'rose'])
+export { PRESET_IDS }
 /** The accepted font ids (mirrors FONT_PRESETS in the client engine). */
 export const FONT_IDS: readonly string[] = Object.freeze(['default', 'rounded', 'serif', 'mono'])
 /** File extension → upload MIME type for `background set`. */
@@ -30,7 +30,7 @@ const EXT_MIME: Readonly<Record<string, string>> = Object.freeze({
 })
 
 /** Usage text appended to every invalid invocation. */
-export const USAGE = 'Usage: /personalization [show] | set <accent #hex | preset ocean|violet|ember|rose | glass 0-0.9 | font default|rounded|serif|mono | storage host|browser> <value> | background set <image path> | background remove | reset'
+export const USAGE = 'Usage: /personalization [show] | set <accent #hex | preset <id> | glass 0-0.9 | font default|rounded|serif|mono | storage host|browser> <value> | background set <image path> | background remove | reset'
 
 /** One parsed command action. */
 export type PersonalizationAction =
@@ -228,7 +228,7 @@ export function registerPersonalizationCommand(
   return commands.register({
     name: 'personalization',
     description: 'show or change personalization settings (accent, transparency, font, background image, storage)',
-    input: { hint: 'show | set <accent #hex|preset ocean|violet|ember|rose|glass 0-0.9|font default|rounded|serif|mono|storage host|browser> <value> | background set <image path> | background remove | reset' },
+    input: { hint: 'show | set <accent #hex|preset <id>|glass 0-0.9|font default|rounded|serif|mono|storage host|browser> <value> | background set <image path> | background remove | reset' },
     handler: invocation => runPersonalizationCommand(invocation.rawInput, store, assets),
   })
 }

@@ -36,6 +36,7 @@ import type { PaletteSeeds } from './settings.ts'
 import { isAssetRef, parseAssetRef, resolveImageSource } from '../shared/config.ts'
 import { deriveSkin, type SkinAppearance } from '../shared/derive.ts'
 import { luminance, parseColor } from '../shared/color.ts'
+import { PALETTE_PRESETS, type PalettePreset } from '../shared/presets.ts'
 import { STOCK } from '../shared/stock.generated.ts'
 import { PANEL_SCOPE_SELECTOR } from './panels.ts'
 
@@ -48,22 +49,11 @@ const SCRIM_VARIABLE = '--dsh-personal-scrim'
 /** The app's scheme attribute, pinned by a seeds theme that declares one. */
 const SCHEME_ATTRIBUTE = 'data-ds-dark-theme'
 
-/**
- * One palette preset: two per-scheme seed sets (the engine derives the whole
- * ramp from them, so the preset adapts to the active scheme).
- */
-export interface PalettePreset {
-  /** Preset id ('' is the built-in look). */
-  id: string
-  /** Display label (the caller supplies the locale). */
-  label: string
-  /** The preset's primary accent (drives the aionui ramp and the swatch). */
-  accent: string
-  /** Seeds for the light scheme. */
-  light: PaletteSeeds
-  /** Seeds for the dark scheme. */
-  dark: PaletteSeeds
-}
+// The preset catalog (builtin + skins + Catppuccin) lives in the shared half:
+// the engine derives the ramp from its seeds, the settings page renders the
+// swatch cards, and the host validates preset ids. Re-exported here so
+// existing `from './engine.ts'` imports keep working.
+export { PALETTE_PRESETS, type PalettePreset, type PresetGroup } from '../shared/presets.ts'
 
 /** Build the accent-derived deepseek token group from a hex accent (the
  *  "quick accent" path — full derivation is preferred, see paletteBlocks). */
@@ -112,38 +102,6 @@ function accentAionDark(accent: string): Record<string, string> {
     '--aion-aou-6': `color-mix(in srgb, ${accent} 60%, white)`,
   }
 }
-
-/** Built-in palette presets: per-scheme seeds, derived at apply time. */
-export const PALETTE_PRESETS: readonly PalettePreset[] = Object.freeze([
-  Object.freeze({
-    id: 'ocean',
-    label: 'Ocean · 海洋青',
-    accent: '#1a8a92',
-    light: { accent: '#1a8a92', secondary: '#4fb3b8', surface: '#ffffff', text: '#16202b' },
-    dark: { accent: '#1a8a92', secondary: '#60bebf', surface: '#10162a', text: '#e9f1f6' },
-  }),
-  Object.freeze({
-    id: 'violet',
-    label: 'Violet · 紫罗兰',
-    accent: '#7f4ecb',
-    light: { accent: '#7f4ecb', secondary: '#aa83de', surface: '#ffffff', text: '#241a38' },
-    dark: { accent: '#7f4ecb', secondary: '#aa83de', surface: '#151022', text: '#eee8f8' },
-  }),
-  Object.freeze({
-    id: 'ember',
-    label: 'Ember · 暖橙',
-    accent: '#dd5c1b',
-    light: { accent: '#dd5c1b', secondary: '#f09259', surface: '#ffffff', text: '#2b1a12' },
-    dark: { accent: '#dd5c1b', secondary: '#e97332', surface: '#211309', text: '#fdf1e8' },
-  }),
-  Object.freeze({
-    id: 'rose',
-    label: 'Rose · 玫瑰红',
-    accent: '#ca3465',
-    light: { accent: '#ca3465', secondary: '#e87698', surface: '#ffffff', text: '#2a1520' },
-    dark: { accent: '#ca3465', secondary: '#db527d', surface: '#1d0f16', text: '#fdeef2' },
-  }),
-])
 
 /** Typography presets: font-family stack for the UI and code fonts. */
 export const FONT_PRESETS: readonly { id: string; label: string; ui: string; code: string }[] = Object.freeze([

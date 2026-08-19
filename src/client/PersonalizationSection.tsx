@@ -229,6 +229,11 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
       return { ...prev, panels }
     })
   }
+  /** Apply a palette preset to the current edit target. */
+  const applyPreset = (id: string): void => {
+    if (isAll) setBase({ palette: { preset: id, accent: null, seeds: null, appearance: null } })
+    else setPanel({ palette: { follow: false, preset: id, accent: null, seeds: null, appearance: null } })
+  }
   /** Flip one knob between follow-theme and independent editing. */
   const toggleFollow = (kind: 'glass' | 'palette' | 'font' | 'scrollbar' | 'selection' | 'background', follow: boolean): void => {
     if (isAll || followCfg === null) return
@@ -745,17 +750,14 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
             >
               <span className={css.swatchNone} />
             </button>
-            {PALETTE_PRESETS.map(p => (
+            {PALETTE_PRESETS.filter(p => p.group === 'builtin').map(p => (
               <button
                 key={p.id}
                 type="button"
                 className={`${css.swatch} ${shown.palette.preset === p.id && paletteAccent === null ? css.swatchActive : ''}`}
                 title={p.label}
                 disabled={!isAll && (followCfg?.palette.follow ?? false)}
-                onClick={() => {
-                  if (isAll) setBase({ palette: { preset: p.id, accent: null, seeds: null, appearance: null } })
-                  else setPanel({ palette: { follow: false, preset: p.id, accent: null, seeds: null, appearance: null } })
-                }}
+                onClick={() => applyPreset(p.id)}
               >
                 <span className={css.swatchColor} style={{ background: p.accent }} />
               </button>
@@ -777,6 +779,43 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
               />
             </label>
           </div>
+          {(['skin', 'catppuccin'] as const).map(group => {
+            const presets = PALETTE_PRESETS.filter(p => p.group === group)
+            if (presets.length === 0) return null
+            return (
+              <div key={group} className={css.presetGroup}>
+                <div className={css.presetGroupTitle}>
+                  {t(group === 'skin' ? 'preset.group.skin' : 'preset.group.catppuccin')}
+                </div>
+                <div className={css.presetGrid}>
+                  {presets.map(p => {
+                    // Thumbnail shows the scheme the skin actually declares
+                    // (a dark skin keeps its dark surface/text, not the
+                    // neutral light variant).
+                    const thumb = p.appearance === 'dark' ? p.dark : p.light
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`${css.presetCard} ${shown.palette.preset === p.id && paletteAccent === null ? css.presetCardActive : ''}`}
+                        title={p.label}
+                        disabled={!isAll && (followCfg?.palette.follow ?? false)}
+                        onClick={() => applyPreset(p.id)}
+                      >
+                        <span className={css.presetSwatches} aria-hidden="true">
+                          <span className={css.presetSwatch} style={{ background: thumb.accent }} />
+                          <span className={css.presetSwatch} style={{ background: thumb.secondary }} />
+                          <span className={css.presetSwatch} style={{ background: thumb.surface }} />
+                          <span className={css.presetSwatch} style={{ background: thumb.text }} />
+                        </span>
+                        <span className={css.presetName}>{p.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </KnobGroup>
 
         <KnobGroup
