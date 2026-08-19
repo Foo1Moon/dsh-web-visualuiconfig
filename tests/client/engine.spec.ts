@@ -18,6 +18,7 @@ before(() => {
   Object.assign(globalThis, {
     window: dom.window,
     document: dom.window.document,
+    MutationObserver: dom.window.MutationObserver,
   })
   body = dom.window.document.body
   head = dom.window.document.head
@@ -44,7 +45,7 @@ function backdropLayer(): HTMLDivElement | null {
 
 test('asset backgrounds render through a fixed backdrop layer, not body inline styles', () => {
   const image = `asset:${'c'.repeat(64)}.jpg`
-  const config = configWith({ globalBackground: { image, scrim: 0.4 } })
+  const config = configWith({ globalBackground: { image, scrim: 0.4, fit: 'cover', blur: 0 } })
   const dispose = applyPersonalization(config)
   try {
     assert.equal(body.getAttribute('data-dsh-personal'), '')
@@ -65,9 +66,44 @@ test('asset backgrounds render through a fixed backdrop layer, not body inline s
   assert.equal(injectedStyle(), null)
 })
 
+test('backdrop fit and blur land on the standalone fixed layer', () => {
+  // Fit: the two-layer size/repeat keep the scrim gradient covering while the
+  // picture follows the mode. Blur: applied as `filter` on the fixed backdrop
+  // element itself (z-index:-1) — never on a column, so no containing block
+  // traps the fixed overlays (settings modal, popovers).
+  const image = `asset:${'d'.repeat(64)}.jpg`
+  const config = configWith({ globalBackground: { image, scrim: 0.3, fit: 'contain', blur: 12 } })
+  const dispose = applyPersonalization(config)
+  try {
+    const layer = backdropLayer()
+    assert.ok(layer !== null)
+    assert.equal(layer.style.backgroundSize, 'cover, contain')
+    assert.equal(layer.style.backgroundRepeat, 'no-repeat, no-repeat')
+    assert.equal(layer.style.filter, 'blur(12px)')
+    assert.equal(layer.style.zIndex, '-1')
+  } finally {
+    dispose()
+  }
+})
+
+test('panel backdrops carry the fit mode in the scoped stylesheet', () => {
+  const image = `asset:${'e'.repeat(64)}.jpg`
+  const config = configWith({})
+  config.base.background = { mode: 'image', image, scrim: 0.3, fit: 'tile' }
+  const dispose = applyPersonalization(config)
+  try {
+    const style = injectedStyle()
+    assert.ok(style !== null)
+    assert.ok(style.textContent.includes('background-size:cover, auto'))
+    assert.ok(style.textContent.includes('background-repeat:no-repeat, repeat'))
+  } finally {
+    dispose()
+  }
+})
+
 test('data-url backgrounds render through blob URLs (createObjectURL present)', () => {
   const dataUrl = 'data:image/jpeg;base64,QUJDRA=='
-  const config = configWith({ globalBackground: { image: dataUrl, scrim: 0.2 } })
+  const config = configWith({ globalBackground: { image: dataUrl, scrim: 0.2, fit: 'cover', blur: 0 } })
   const dispose = applyPersonalization(config)
   try {
     // Node 24 provides URL.createObjectURL, so the engine converts the data URL
@@ -223,7 +259,7 @@ test('glass surfaces derive from the theme surface seed, not the official base',
 test('dispose removes the style tag, the layer, and the attribute', () => {
   const image = `asset:${'f'.repeat(64)}.png`
   const config = configWith({
-    globalBackground: { image, scrim: 0.3 },
+    globalBackground: { image, scrim: 0.3, fit: 'cover', blur: 0 },
     base: { ...structuredClone(DEFAULT_CONFIG.base) as PersonalizationConfig['base'], palette: { preset: 'ocean', accent: null, seeds: null, appearance: null } },
   })
   const dispose = applyPersonalization(config)
@@ -235,4 +271,22 @@ test('dispose removes the style tag, the layer, and the attribute', () => {
   assert.equal(backdropLayer(), null)
   assert.equal(body.hasAttribute('data-dsh-personal'), false)
   assert.equal(body.style.backgroundImage, '')
+})
+
+test('running status text replaces the official label and restores on dispose', () => {
+  const statusEl = document.createElement('div')
+  statusEl.setAttribute('role', 'status')
+  statusEl.textContent = 'Deep diving...'
+  document.body.appendChild(statusEl)
+  const config = configWith({})
+  config.chrome.statusText = '小难梁在0721'
+  const dispose = applyPersonalization(config)
+  try {
+    assert.equal(statusEl.textContent, '小难梁在0721')
+  } finally {
+    dispose()
+  }
+  // The disposer restores the official fallback on the node it wrote.
+  assert.equal(statusEl.textContent, 'Deep diving...')
+  statusEl.remove()
 })

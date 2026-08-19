@@ -32,6 +32,29 @@ test('sanitizeConfig strips unknown fields and clamps values', () => {
   assert.equal(config.base.palette.preset, 'ocean')
 })
 
+test('sanitizeConfig clamps background fit and blur', () => {
+  const config = sanitizeConfig({
+    globalBackground: { image: 'data:image/jpeg;base64,xxx', scrim: 2, fit: 'zoom', blur: 999 },
+    base: { background: { mode: 'image', image: 'data:image/jpeg;base64,yyy', scrim: 0.5, fit: 'tile' } },
+    panels: { sidebar: { background: { follow: false, mode: 'image', image: 'data:image/jpeg;base64,zzz', scrim: 0.3, fit: 'stretch' } } },
+  })
+  // Unknown fit falls back to cover; blur clamps to the 60px cap; scrim 0..1.
+  assert.equal(config.globalBackground.fit, 'cover')
+  assert.equal(config.globalBackground.blur, 60)
+  assert.equal(config.globalBackground.scrim, 1)
+  assert.equal(config.base.background.fit, 'tile')
+  assert.equal(config.panels.sidebar.background.fit, 'stretch')
+})
+
+test('sanitizeConfig trims chrome status text', () => {
+  const config = sanitizeConfig({
+    chrome: { statusText: 'x'.repeat(120), title: 'T', junk: 1 },
+  })
+  assert.equal(config.chrome.statusText.length, 64)
+  assert.equal(config.chrome.statusText, 'x'.repeat(64))
+  assert.equal(config.chrome.title, 'T')
+})
+
 test('sanitizeConfig migrates the legacy flat shape', () => {
   const config = sanitizeConfig({
     glass: { opacity: 0.3 },

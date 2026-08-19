@@ -53,6 +53,12 @@ export type PersonalizationKey =
   | 'background.independentHint'
   | 'background.mode.solid'
   | 'background.mode.image'
+  | 'background.fit'
+  | 'background.fit.cover'
+  | 'background.fit.contain'
+  | 'background.fit.stretch'
+  | 'background.fit.tile'
+  | 'background.blur'
   | 'globalBackground.title'
   | 'globalBackground.desc'
   | 'glass.title'
@@ -62,8 +68,6 @@ export type PersonalizationKey =
   | 'palette.title'
   | 'palette.custom'
   | 'palette.none'
-  | 'preset.group.skin'
-  | 'preset.group.catppuccin'
   | 'font.title'
   | 'font.custom'
   | 'scrollbar.title'
@@ -77,6 +81,9 @@ export type PersonalizationKey =
   | 'chrome.faviconRemove'
   | 'chrome.titleLabel'
   | 'chrome.titleClear'
+  | 'chrome.statusLabel'
+  | 'chrome.statusPlaceholder'
+  | 'chrome.statusClear'
   | 'reset'
   | 'reset.confirm'
   | 'hint'
@@ -130,6 +137,12 @@ export const zh: Record<PersonalizationKey, string> = {
   'background.independentHint': '{n} 个面板的背景为独立状态，未跟随此图；勾选「跟随主题」可全部应用',
   'background.mode.solid': '纯色背景',
   'background.mode.image': '背景图',
+  'background.fit': '显示方式',
+  'background.fit.cover': '铺满',
+  'background.fit.contain': '完整显示',
+  'background.fit.stretch': '拉伸',
+  'background.fit.tile': '平铺',
+  'background.blur': '模糊（全局背景）',
   'globalBackground.title': '全局背景',
   'globalBackground.desc': '整页底层背景图，与各面板背景独立；面板未设置自己的背景图时会透出它',
   'glass.title': '面板透明度',
@@ -139,8 +152,6 @@ export const zh: Record<PersonalizationKey, string> = {
   'palette.title': '主题色',
   'palette.custom': '自定义',
   'palette.none': '跟随官方',
-  'preset.group.skin': '预设皮肤',
-  'preset.group.catppuccin': 'Catppuccin',
   'font.title': '字体',
   'font.custom': '自定义字体栈（CSS font-family）',
   'scrollbar.title': '自定义滚动条',
@@ -154,6 +165,9 @@ export const zh: Record<PersonalizationKey, string> = {
   'chrome.faviconRemove': '移除',
   'chrome.titleLabel': '页面标题',
   'chrome.titleClear': '清除',
+  'chrome.statusLabel': '运行状态文案',
+  'chrome.statusPlaceholder': 'Deep diving...（默认）',
+  'chrome.statusClear': '恢复默认',
   'reset': '恢复默认设置',
   'reset.confirm': '确定恢复全部默认设置？',
   'hint': '配置默认跟随本机（存于 ~/.dsh/dsh-web-personalization.json），重启 dsh 或换浏览器仍然生效；可在上方切换为仅保存在当前浏览器。',
@@ -208,6 +222,12 @@ export const en: Record<PersonalizationKey, string> = {
   'background.independentHint': '{n} panel(s) have an independent background and do not follow this image; tick "Follow theme" to apply to all',
   'background.mode.solid': 'Solid color',
   'background.mode.image': 'Image',
+  'background.fit': 'Fit',
+  'background.fit.cover': 'Cover',
+  'background.fit.contain': 'Contain',
+  'background.fit.stretch': 'Stretch',
+  'background.fit.tile': 'Tile',
+  'background.blur': 'Blur (global backdrop)',
   'globalBackground.title': 'Global background',
   'globalBackground.desc': 'Page-wide bottom-layer backdrop, independent of panel backgrounds; panels without their own image show it through',
   'glass.title': 'Panel transparency',
@@ -217,8 +237,6 @@ export const en: Record<PersonalizationKey, string> = {
   'palette.title': 'Accent color',
   'palette.custom': 'Custom',
   'palette.none': 'Official',
-  'preset.group.skin': 'Preset skins',
-  'preset.group.catppuccin': 'Catppuccin',
   'font.title': 'Typography',
   'font.custom': 'Custom font stack (CSS font-family)',
   'scrollbar.title': 'Custom scrollbar',
@@ -232,6 +250,9 @@ export const en: Record<PersonalizationKey, string> = {
   'chrome.faviconRemove': 'Remove',
   'chrome.titleLabel': 'Page title',
   'chrome.titleClear': 'Clear',
+  'chrome.statusLabel': 'Running status text',
+  'chrome.statusPlaceholder': 'Deep diving... (default)',
+  'chrome.statusClear': 'Reset',
   'reset': 'Reset all settings',
   'reset.confirm': 'Reset everything to defaults?',
   'hint': 'Settings follow this machine by default (~/.dsh/dsh-web-personalization.json): they survive a dsh restart and follow you to another browser. Use the switch above to keep them in this browser only.',

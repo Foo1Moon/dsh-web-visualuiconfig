@@ -10,14 +10,14 @@ A standalone, hot-pluggable DeepSeek Harness (DSH) Web GUI plugin that layers sw
 
 | Capability | Description |
 | --- | --- |
-| Background settings | Every panel (unified between the "all panels" and single-panel targets) has its own background group: **solid color** (default — the panel shows its base color, transparency still applies) or **image** (rendered at the panel's layer, center-cropped to the panel's aspect ratio, scrim adjustable). The "all panels" upload is a **source bridge**: it only compresses, never crops — each panel crops via `background-size: cover` at render time and shows it only while its background knob follows the baseline (panels with an independent background get a hint) |
-| Global background | A page-level group outside the edit target: a page-wide **bottom-layer** backdrop (rendered on body), independent of panel backgrounds — panels without their own image show it through, panels with their own image cover it |
+| Background settings | Every panel (unified between the "all panels" and single-panel targets) has its own background group: **solid color** (default — the panel shows its base color, transparency still applies) or **image** (rendered at the panel's layer, scrim adjustable, **fit: cover / contain / stretch / tile**). The "all panels" upload is a **source bridge**: it only compresses, never crops — each panel crops via `background-size: cover` at render time and shows it only while its background knob follows the baseline (panels with an independent background get a hint) |
+| Global background | A page-level group outside the edit target: a page-wide **bottom-layer** backdrop (rendered on body), independent of panel backgrounds — panels without their own image show it through, panels with their own image cover it. Supports **fit** (cover/contain/stretch/tile) and **blur** (0–60px, applied as `filter` on the standalone fixed backdrop layer — never a column, so it traps no fixed overlays) |
 | Panel transparency | 0–0.9 slider: 0 = official opaque (the backdrop is fully covered), right = more transparent and the backdrop shows through; floating layers (menu/dialog/input) stay more opaque for readability. No `backdrop-filter`: blur on the official frame columns traps fixed overlays (the settings modal etc.), a boundary the dsh-web-ui skin system documents |
-| Accent palette | 29 presets: 4 built-in (Ocean / Violet / Ember / Rose) + 21 character skins (Hatsune Miku, Genshin, Naruto, Wuthering Waves, Love&Deepspace …; seeds from deepseek-harness-skin, single-scheme skins get a neutral opposite-scheme variant) + 4 Catppuccin flavors (Latte / Frappé / Macchiato / Mocha); plus a custom hex accent (`color-mix` derives the full ramp), overriding `--dsw-static-deepseek-*` and the aionui panel's `--aion-*` tokens; light/dark auto-adapt |
+| Accent palette | 4 built-in global theme presets (Ocean / Violet / Ember / Rose) plus a custom hex accent (`color-mix` derives the full ramp), overriding `--dsw-static-deepseek-*` and the aionui panel's `--aion-*` tokens; light/dark auto-adapt. The 21 deepseek-harness-skin palettes and 4 Catppuccin flavors are kept as **internal colour art assets** (`SKIN_PRESET_ASSETS` / `CATPPUCCIN_PRESET_ASSETS` in `src/shared/presets.ts`), not exposed to users |
 | Typography | Rounded / Serif / Mono presets, or a custom `font-family` stack |
 | Scrollbar | Rounded scrollbar, light/dark palettes |
 | Selection color | Custom `::selection` background |
-| Page chrome | Favicon (≤128px) and page-title override |
+| Page chrome | Favicon (≤128px), page-title override, and a **running status text** (replaces the official "Deep diving...", injected into `[role="status"]` via a DOM observer; clearing restores the official label) |
 | Panel-level personalization | Runtime detection of present panels; the "edit target" selector defaults to "all panels", editing the baseline appearance that every follow knob inherits from. Every module (transparency / palette / font / scrollbar / selection / background) carries a "follow theme" switch — a single-panel view flips that panel's knob, the "all panels" view flips every panel's knob at once — plus a "follow all" master switch in both views. Current panels: sidebar, conversation, details, right file/preview panel (aionui), task board, SSH panel |
 | Config storage | A "Config storage" section chooses where settings live: **follow this machine** (default — persisted to `~/.dsh/dsh-web-personalization.json` through the host half, so they survive restarts *and* follow you to another browser) or **this browser only** (the original `localStorage` behavior). Images are stored as files under `~/.dsh/personalization/` and served as short same-origin URLs, so they escape the `localStorage` quota and the 2 MB CSS `url()` limit |
 | Character themes | Give an anime character art image + a short introduction; the agent reads the art, derives the look (accent/preset/font/transparency/scrollbar/selection/background/title) and applies it, producing a GUI that matches the character. Themes are saved in a library (`themes`) with list/switch/deactivate/remove; deactivating restores the pre-theme official look |
@@ -75,7 +75,7 @@ Four ways to drive the settings without the GUI (every change is broadcast to al
     -d '{"base":{"palette":{"accent":"#ff8800"}}}' \
     http://127.0.0.1:3080/personalization/config
   ```
-- **Command** — `/personalization` in the chat input (no model round-trip): `show`, `set accent #hex`, `set preset <id>` (any of the 29 catalog ids), `set glass 0-0.9`, `set font default|rounded|serif|mono`, `set storage host|browser`, `background set <local image path>`, `background remove`, `reset`.
+- **Command** — `/personalization` in the chat input (no model round-trip): `show`, `set accent #hex`, `set preset ocean|violet|ember|rose`, `set glass 0-0.9`, `set font default|rounded|serif|mono`, `set storage host|browser`, `background set <local image path>`, `background remove`, `reset`.
 - **Service** — other plugins `inject: ['personalization']` to call `read()`, `update(patch)`, `reset()`, `onUpdated(cb)`.
 
 ## Character themes
@@ -131,7 +131,7 @@ src/host/character-tool.ts      # character_theme / character_theme_manage tools
 src/host/patch.ts               # deepMerge for partial config updates (re-exports the shared impl)
 src/host/types.ts               # minimal type bridges for webServer/commands/personalization services
 src/shared/config.ts            # config model + sanitize + storageMode + asset refs + theme/seeds types
-src/shared/presets.ts           # preset catalog: 4 builtin + 21 skins (deepseek-harness-skin) + 4 Catppuccin
+src/shared/presets.ts           # preset catalog (4 built-in global themes) + skin/Catppuccin colour art assets
 src/shared/theme.ts             # theme library logic: activate/switch/deactivate/remove/snapshot/patch
 src/shared/patch.ts             # deepMerge (environment-agnostic, inlined into both bundles)
 src/shared/color.ts             # OKLab/OKLCh colour math (ported from deepseek-harness-skin, MIT)
@@ -142,6 +142,7 @@ src/shared/stock.ts             # upstream palette data types (StockStep/StockDa
 src/shared/stock.generated.ts   # generated data: 73-step palette + 89 semantic aliases (build-stock.mjs)
 src/client/index.ts             # browser half: registers the settings page, wires engine + host sync (SSE)
 src/client/engine.ts            # effect engine: attribute-scoped derived palette / fixed backdrop layer / fonts / chrome
+src/client/status-injector.ts   # running status text: MutationObserver rewrites [role="status"] (official Deep diving...)
 src/client/settings.ts          # localStorage cache over the shared model (legacy migration in shared/config.ts)
 src/client/host.ts              # browser → host transport (fetch wrappers)
 src/client/PersonalizationSection.tsx  # settings page component

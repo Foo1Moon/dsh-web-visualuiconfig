@@ -36,6 +36,12 @@ export const PANEL_IDS: readonly PanelId[] = Object.freeze([
   'ssh',
 ])
 
+/** Wallpaper display mode: how the backdrop image fits its area. */
+export type BackgroundFit = 'cover' | 'contain' | 'stretch' | 'tile'
+
+/** The accepted fit ids. */
+export const BACKGROUND_FITS: readonly BackgroundFit[] = Object.freeze(['cover', 'contain', 'stretch', 'tile'])
+
 /** A panel background: either a solid base color or a backdrop image. */
 export interface PanelBackgroundSettings {
   /** 'solid' paints the panel's base color (no backdrop); 'image' shows an image. */
@@ -44,6 +50,8 @@ export interface PanelBackgroundSettings {
   image: string | null
   /** Scrim alpha over the image, 0..1. */
   scrim: number
+  /** How the image fits the panel area (only when mode === 'image'). */
+  fit: BackgroundFit
 }
 
 /**
@@ -118,7 +126,7 @@ export interface PanelFollowConfig {
   font: { follow: boolean; family: string; custom: string }
   scrollbar: { follow: boolean; value: boolean }
   selection: { follow: boolean; value: string | null }
-  background: { follow: boolean; mode: 'solid' | 'image'; image: string | null; scrim: number }
+  background: { follow: boolean; mode: 'solid' | 'image'; image: string | null; scrim: number; fit: BackgroundFit }
 }
 
 /** Default per-panel appearance (the official look untouched). */
@@ -128,7 +136,7 @@ export const DEFAULT_PANEL_CONFIG: PanelConfig = Object.freeze({
   font: { family: 'default', custom: '' },
   scrollbar: false,
   selection: null,
-  background: { mode: 'solid' as const, image: null, scrim: 0.25 },
+  background: { mode: 'solid' as const, image: null, scrim: 0.25, fit: 'cover' as const },
 })
 
 /** Default per-panel config: every knob follows the baseline. */
@@ -139,7 +147,7 @@ export function defaultFollowConfig(): PanelFollowConfig {
     font: { follow: true, family: 'default', custom: '' },
     scrollbar: { follow: true, value: false },
     selection: { follow: true, value: null },
-    background: { follow: true, mode: 'solid', image: null, scrim: 0.25 },
+    background: { follow: true, mode: 'solid', image: null, scrim: 0.25, fit: 'cover' },
   }) as PanelFollowConfig
 }
 
@@ -168,7 +176,7 @@ export function resolvePanelConfig(base: PanelConfig, follow: PanelFollowConfig)
     selection: follow.selection.follow ? base.selection : follow.selection.value,
     background: follow.background.follow
       ? structuredClone(base.background)
-      : { mode: follow.background.mode, image: follow.background.image, scrim: follow.background.scrim },
+      : { mode: follow.background.mode, image: follow.background.image, scrim: follow.background.scrim, fit: follow.background.fit },
   }
 }
 
@@ -182,9 +190,9 @@ export interface AppearanceSections {
   /** One follow-capable appearance config per detectable panel. */
   panels: Record<PanelId, PanelFollowConfig>
   /** Page-wide backdrop. */
-  globalBackground: { image: string | null; scrim: number }
+  globalBackground: { image: string | null; scrim: number; fit: BackgroundFit; blur: number }
   /** Page chrome: favicon and title. */
-  chrome: { favicon: string | null; title: string | null }
+  chrome: { favicon: string | null; title: string | null; statusText: string }
 }
 
 /** The appearance patch a character theme applies (a partial overlay). */
@@ -200,12 +208,12 @@ export interface CharacterThemePatch {
     font?: { family?: string; custom?: string }
     scrollbar?: boolean
     selection?: string | null
-    background?: { mode?: 'solid' | 'image'; image?: string | null; scrim?: number }
+    background?: { mode?: 'solid' | 'image'; image?: string | null; scrim?: number; fit?: BackgroundFit }
   }
   /** Optional per-panel overrides (a theme normally drives the baseline). */
   panels?: Partial<Record<PanelId, Partial<PanelFollowConfig>>>
-  globalBackground?: { image?: string | null; scrim?: number }
-  chrome?: { favicon?: string | null; title?: string | null }
+  globalBackground?: { image?: string | null; scrim?: number; fit?: BackgroundFit; blur?: number }
+  chrome?: { favicon?: string | null; title?: string | null; statusText?: string }
 }
 
 /** One saved character theme in the library. */
@@ -261,13 +269,25 @@ export interface PersonalizationConfig {
     image: string | null
     /** Page-wide scrim alpha over the image, 0..1. */
     scrim: number
+    /** How the image fits the viewport. */
+    fit: BackgroundFit
+    /** Gaussian blur radius on the backdrop layer, 0..60px (safe: the blur
+     *  lives on the standalone fixed backdrop element, never a column). */
+    blur: number
   }
-  /** Page chrome: favicon and title — page-global. */
+  /** Page chrome: favicon, title and the running-turn status text. */
   chrome: {
     /** Favicon image (data URL or `asset:` ref), or null for the default. */
     favicon: string | null
     /** Document title override, or null for the default. */
     title: string | null
+    /**
+     * Running-turn status text shown next to the elapsed clock while a turn
+     * is running (replaces the official "Deep diving..."). '' keeps the
+     * official label. Injected via a DOM observer over the official
+     * `[role="status"]` element — upstream hard-codes the label with no seam.
+     */
+    statusText: string
   }
   /** The "all panels" baseline appearance (the follow knobs inherit from). */
   base: PanelConfig
@@ -289,8 +309,8 @@ function defaultPanels(): Record<PanelId, PanelFollowConfig> {
 export const DEFAULT_CONFIG: PersonalizationConfig = Object.freeze({
   storageMode: 'host',
   enabled: true,
-  globalBackground: { image: null, scrim: 0.25 },
-  chrome: { favicon: null, title: null },
+  globalBackground: { image: null, scrim: 0.25, fit: 'cover' as const, blur: 0 },
+  chrome: { favicon: null, title: null, statusText: '' },
   base: structuredClone(DEFAULT_PANEL_CONFIG) as PanelConfig,
   panels: Object.freeze(defaultPanels()),
   themes: Object.freeze({ active: null, list: [] }),
@@ -310,6 +330,16 @@ function sanitizePaletteSeeds(raw: unknown): PaletteSeeds | null {
   const text = pick('text')
   if (accent === null || secondary === null || surface === null || text === null) return null
   return { accent, secondary, surface, text }
+}
+
+/** Coerce a raw value into a known fit id, 'cover' by default. */
+function sanitizeFit(value: unknown): BackgroundFit {
+  return BACKGROUND_FITS.includes(value as BackgroundFit) ? value as BackgroundFit : 'cover'
+}
+
+/** Coerce a raw value into a wallpaper blur radius, clamped 0..60px. */
+function sanitizeBlur(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(60, Math.max(0, value)) : 0
 }
 
 /** Sanitize one panel appearance value. */
@@ -341,6 +371,7 @@ function sanitizePanelConfig(raw: unknown): PanelConfig {
     if (b.mode === 'image') base.background.mode = 'image'
     if (typeof b.image === 'string') base.background.image = b.image
     if (typeof b.scrim === 'number') base.background.scrim = Math.min(1, Math.max(0, b.scrim))
+    base.background.fit = sanitizeFit(b.fit)
   }
   return base
 }
@@ -359,7 +390,7 @@ function followFromPanel(pc: PanelConfig): PanelFollowConfig {
     font: { follow: false, family: pc.font.family, custom: pc.font.custom },
     scrollbar: { follow: false, value: pc.scrollbar },
     selection: { follow: false, value: pc.selection },
-    background: { follow: false, mode: pc.background.mode, image: pc.background.image, scrim: pc.background.scrim },
+    background: { follow: false, mode: pc.background.mode, image: pc.background.image, scrim: pc.background.scrim, fit: pc.background.fit },
   }
 }
 
@@ -408,6 +439,7 @@ function sanitizeFollowConfig(raw: unknown): PanelFollowConfig {
     if (b.mode === 'solid' || b.mode === 'image') base.background.mode = b.mode
     if (typeof b.image === 'string') base.background.image = b.image
     if (typeof b.scrim === 'number') base.background.scrim = Math.min(1, Math.max(0, b.scrim))
+    base.background.fit = sanitizeFit(b.fit)
   }
   return base
 }
@@ -465,6 +497,7 @@ function sanitizeThemePatch(raw: Record<string, unknown>): CharacterThemePatch {
       if (bgr.mode === 'solid' || bgr.mode === 'image') background.mode = bgr.mode
       if (bgr.image === null || typeof bgr.image === 'string') background.image = bgr.image
       if (typeof bgr.scrim === 'number') background.scrim = Math.min(1, Math.max(0, bgr.scrim))
+      if (bgr.fit !== undefined) background.fit = sanitizeFit(bgr.fit)
       if (Object.keys(background).length > 0) base.background = background
     }
     if (Object.keys(base).length > 0) out.base = base
@@ -475,6 +508,8 @@ function sanitizeThemePatch(raw: Record<string, unknown>): CharacterThemePatch {
     const globalBackground: NonNullable<CharacterThemePatch['globalBackground']> = {}
     if (gbr.image === null || typeof gbr.image === 'string') globalBackground.image = gbr.image
     if (typeof gbr.scrim === 'number') globalBackground.scrim = Math.min(1, Math.max(0, gbr.scrim))
+    if (gbr.fit !== undefined) globalBackground.fit = sanitizeFit(gbr.fit)
+    if (gbr.blur !== undefined) globalBackground.blur = sanitizeBlur(gbr.blur)
     if (Object.keys(globalBackground).length > 0) out.globalBackground = globalBackground
   }
   const c = raw.chrome
@@ -483,6 +518,7 @@ function sanitizeThemePatch(raw: Record<string, unknown>): CharacterThemePatch {
     const chrome: NonNullable<CharacterThemePatch['chrome']> = {}
     if (cr.favicon === null || typeof cr.favicon === 'string') chrome.favicon = cr.favicon
     if (cr.title === null || typeof cr.title === 'string') chrome.title = cr.title
+    if (typeof cr.statusText === 'string') chrome.statusText = cr.statusText.slice(0, 64)
     if (Object.keys(chrome).length > 0) out.chrome = chrome
   }
   const panels = raw.panels
@@ -538,19 +574,22 @@ function sanitizeAppearanceSections(raw: unknown): AppearanceSections {
       panels[id] = sanitizeFollowConfig(entry)
     }
   }
-  const globalBackground = { image: null as string | null, scrim: 0.25 }
+  const globalBackground = { image: null as string | null, scrim: 0.25, fit: 'cover' as BackgroundFit, blur: 0 }
   const gb = r.globalBackground
   if (typeof gb === 'object' && gb !== null) {
     const gbr = gb as Record<string, unknown>
     if (typeof gbr.image === 'string') globalBackground.image = gbr.image
     if (typeof gbr.scrim === 'number') globalBackground.scrim = Math.min(1, Math.max(0, gbr.scrim))
+    globalBackground.fit = sanitizeFit(gbr.fit)
+    globalBackground.blur = sanitizeBlur(gbr.blur)
   }
-  const chrome = { favicon: null as string | null, title: null as string | null }
+  const chrome = { favicon: null as string | null, title: null as string | null, statusText: '' }
   const c = r.chrome
   if (typeof c === 'object' && c !== null) {
     const cr = c as Record<string, unknown>
     if (typeof cr.favicon === 'string') chrome.favicon = cr.favicon
     if (typeof cr.title === 'string') chrome.title = cr.title
+    if (typeof cr.statusText === 'string') chrome.statusText = cr.statusText.slice(0, 64)
   }
   return { base: sanitizePanelConfig(r.base), panels, globalBackground, chrome }
 }
@@ -567,6 +606,8 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
     const g = r.globalBackground as Record<string, unknown>
     if (typeof g.image === 'string') base.globalBackground.image = g.image
     if (typeof g.scrim === 'number') base.globalBackground.scrim = Math.min(1, Math.max(0, g.scrim))
+    base.globalBackground.fit = sanitizeFit(g.fit)
+    base.globalBackground.blur = sanitizeBlur(g.blur)
   }
   // Legacy page-level background: a page-wide image and/or per-panel entries.
   // The page-wide image becomes the page-wide backdrop; the per-panel
@@ -608,6 +649,7 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
     const c = r.chrome as Record<string, unknown>
     if (typeof c.favicon === 'string') base.chrome.favicon = c.favicon
     if (typeof c.title === 'string') base.chrome.title = c.title
+    if (typeof c.statusText === 'string') base.chrome.statusText = c.statusText.slice(0, 64)
   }
   // The "all panels" baseline; older documents have no base and derive it
   // from the legacy flat knobs below.
@@ -617,7 +659,7 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
   // The legacy page-wide image becomes the page-wide backdrop (bottom layer),
   // unless a newer globalBackground entry already provided one.
   if (legacyGlobalImage !== null && base.globalBackground.image === null) {
-    base.globalBackground = { image: legacyGlobalImage.image, scrim: legacyGlobalImage.scrim }
+    base.globalBackground = { image: legacyGlobalImage.image, scrim: legacyGlobalImage.scrim, fit: 'cover', blur: 0 }
   }
   // Per-panel appearance dictionary.
   if (typeof r.panels === 'object' && r.panels !== null) {
@@ -664,7 +706,7 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
         : { family: 'default', custom: '' },
       scrollbar: typeof r.scrollbar === 'boolean' ? r.scrollbar : false,
       selection: typeof r.selection === 'string' ? r.selection : null,
-      background: { mode: 'solid', image: null, scrim: 0.25 },
+      background: { mode: 'solid', image: null, scrim: 0.25, fit: 'cover' },
     })
     base.base = legacy()
     for (const id of ['sidebar', 'conversation', 'details'] as const) {
@@ -682,11 +724,11 @@ export function sanitizeConfig(raw: unknown): PersonalizationConfig {
   for (const [id, entry] of legacyPanelBackgrounds) {
     const panel = base.panels[id]
     if (entry.mode === 'custom' && entry.image !== null) {
-      panel.background = { follow: false, mode: 'image', image: entry.image, scrim: entry.scrim }
+      panel.background = { follow: false, mode: 'image', image: entry.image, scrim: entry.scrim, fit: 'cover' }
     } else if (entry.mode === 'follow') {
-      panel.background = { follow: true, mode: 'solid', image: null, scrim: entry.scrim }
+      panel.background = { follow: true, mode: 'solid', image: null, scrim: entry.scrim, fit: 'cover' }
     } else {
-      panel.background = { follow: false, mode: 'solid', image: null, scrim: entry.scrim }
+      panel.background = { follow: false, mode: 'solid', image: null, scrim: entry.scrim, fit: 'cover' }
     }
   }
   // The character theme library: sanitize every saved theme and drop a

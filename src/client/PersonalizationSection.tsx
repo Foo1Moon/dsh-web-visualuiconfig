@@ -27,7 +27,7 @@ import { compressImage } from './image.ts'
 import { detectPanels, PANEL_SCOPE_SELECTOR, type PanelInfo } from './panels.ts'
 import {
   PANEL_IDS, resolvePanelConfig, resolveImageSource, themeIdFromName,
-  type CharacterTheme, type PaletteSeeds, type PanelBackgroundSettings, type PanelConfig, type PanelFollowConfig, type PanelId, type PersonalizationConfig,
+  type BackgroundFit, type CharacterTheme, type PaletteSeeds, type PanelBackgroundSettings, type PanelConfig, type PanelFollowConfig, type PanelId, type PersonalizationConfig,
 } from './settings.ts'
 import { activateTheme, buildThemePatch, deactivateTheme, findTheme, removeTheme } from '../shared/theme.ts'
 import { analyzeImagePixels, samplePixelsFromDataUrl } from './character-wizard.ts'
@@ -266,6 +266,7 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
         mode: follow ? followCfg.background.mode : base.background.mode,
         image: follow ? followCfg.background.image : base.background.image,
         scrim: follow ? followCfg.background.scrim : base.background.scrim,
+        fit: follow ? followCfg.background.fit : base.background.fit,
       }
     }
     setPanel(patch)
@@ -295,6 +296,7 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
         mode: follow ? followCfg.background.mode : base.background.mode,
         image: follow ? followCfg.background.image : base.background.image,
         scrim: follow ? followCfg.background.scrim : base.background.scrim,
+        fit: follow ? followCfg.background.fit : base.background.fit,
       },
     })
   }
@@ -391,7 +393,7 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
       font: { follow: true, family: base.font.family, custom: base.font.custom },
       scrollbar: { follow: true, value: base.scrollbar },
       selection: { follow: true, value: base.selection },
-      background: { follow: true, mode: base.background.mode, image: base.background.image, scrim: base.background.scrim },
+      background: { follow: true, mode: base.background.mode, image: base.background.image, scrim: base.background.scrim, fit: base.background.fit },
     })
   }
 
@@ -399,6 +401,13 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
   const shownBg = shown.background
   const bgMode = shownBg.mode
   const bgHasImage = shownBg.image !== null && shownBg.image !== undefined
+  /** The fit-mode options (shared by the panel and the page-wide backdrop). */
+  const fitOptions: ReadonlyArray<readonly [BackgroundFit, string]> = [
+    ['cover', t('background.fit.cover')],
+    ['contain', t('background.fit.contain')],
+    ['stretch', t('background.fit.stretch')],
+    ['tile', t('background.fit.tile')],
+  ]
   /** Panels whose background knob is independent (not following the baseline). */
   const independentBgPanels = PANEL_IDS.filter(id => !config.panels[id].background.follow).length
   /** Write background settings to the current edit target. The "all panels"
@@ -408,7 +417,7 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
     if (isAll) {
       setBase({ background: { ...config.base.background, ...patch } })
     } else {
-      setPanel({ background: { ...(followCfg?.background ?? { follow: false, mode: 'solid' as const, image: null, scrim: 0.25 }), follow: false, ...patch } })
+      setPanel({ background: { ...(followCfg?.background ?? { follow: false, mode: 'solid' as const, image: null, scrim: 0.25, fit: 'cover' as const }), follow: false, ...patch } })
     }
   }
   /** Store a compressed image: upload to the host in host mode (returning an
@@ -750,7 +759,7 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
             >
               <span className={css.swatchNone} />
             </button>
-            {PALETTE_PRESETS.filter(p => p.group === 'builtin').map(p => (
+            {PALETTE_PRESETS.map(p => (
               <button
                 key={p.id}
                 type="button"
@@ -779,43 +788,6 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
               />
             </label>
           </div>
-          {(['skin', 'catppuccin'] as const).map(group => {
-            const presets = PALETTE_PRESETS.filter(p => p.group === group)
-            if (presets.length === 0) return null
-            return (
-              <div key={group} className={css.presetGroup}>
-                <div className={css.presetGroupTitle}>
-                  {t(group === 'skin' ? 'preset.group.skin' : 'preset.group.catppuccin')}
-                </div>
-                <div className={css.presetGrid}>
-                  {presets.map(p => {
-                    // Thumbnail shows the scheme the skin actually declares
-                    // (a dark skin keeps its dark surface/text, not the
-                    // neutral light variant).
-                    const thumb = p.appearance === 'dark' ? p.dark : p.light
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`${css.presetCard} ${shown.palette.preset === p.id && paletteAccent === null ? css.presetCardActive : ''}`}
-                        title={p.label}
-                        disabled={!isAll && (followCfg?.palette.follow ?? false)}
-                        onClick={() => applyPreset(p.id)}
-                      >
-                        <span className={css.presetSwatches} aria-hidden="true">
-                          <span className={css.presetSwatch} style={{ background: thumb.accent }} />
-                          <span className={css.presetSwatch} style={{ background: thumb.secondary }} />
-                          <span className={css.presetSwatch} style={{ background: thumb.surface }} />
-                          <span className={css.presetSwatch} style={{ background: thumb.text }} />
-                        </span>
-                        <span className={css.presetName}>{p.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
         </KnobGroup>
 
         <KnobGroup
@@ -961,15 +933,33 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
                 )}
               </div>
               {bgHasImage && (
-                <RangeRow
-                  label={t('background.scrim')}
-                  value={shownBg.scrim}
-                  min={0}
-                  max={0.9}
-                  step={0.05}
-                  disabled={!isAll && (followCfg?.background.follow ?? false)}
-                  onChange={setBgScrim}
-                />
+                <>
+                  <RangeRow
+                    label={t('background.scrim')}
+                    value={shownBg.scrim}
+                    min={0}
+                    max={0.9}
+                    step={0.05}
+                    disabled={!isAll && (followCfg?.background.follow ?? false)}
+                    onChange={setBgScrim}
+                  />
+                  <div className={css.row}>
+                    <span className={css.rowLabel}>{t('background.fit')}</span>
+                    <div className={css.segRow}>
+                      {fitOptions.map(([fit, label]) => (
+                        <button
+                          key={fit}
+                          type="button"
+                          className={`${css.segButton} ${shownBg.fit === fit ? css.segActive : ''}`}
+                          disabled={!isAll && (followCfg?.background.follow ?? false)}
+                          onClick={() => writeBg({ fit })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
             </>
           )}
@@ -994,14 +984,39 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
           )}
         </div>
         {config.globalBackground.image !== null && (
-          <RangeRow
-            label={t('background.scrim')}
-            value={config.globalBackground.scrim}
-            min={0}
-            max={0.9}
-            step={0.05}
-            onChange={(scrim) => set({ globalBackground: { ...config.globalBackground, scrim } })}
-          />
+          <>
+            <RangeRow
+              label={t('background.scrim')}
+              value={config.globalBackground.scrim}
+              min={0}
+              max={0.9}
+              step={0.05}
+              onChange={(scrim) => set({ globalBackground: { ...config.globalBackground, scrim } })}
+            />
+            <div className={css.row}>
+              <span className={css.rowLabel}>{t('background.fit')}</span>
+              <div className={css.segRow}>
+                {fitOptions.map(([fit, label]) => (
+                  <button
+                    key={fit}
+                    type="button"
+                    className={`${css.segButton} ${config.globalBackground.fit === fit ? css.segActive : ''}`}
+                    onClick={() => set({ globalBackground: { ...config.globalBackground, fit } })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <RangeRow
+              label={t('background.blur')}
+              value={config.globalBackground.blur}
+              min={0}
+              max={60}
+              step={2}
+              onChange={(blur) => set({ globalBackground: { ...config.globalBackground, blur } })}
+            />
+          </>
         )}
       </div>
 
@@ -1033,6 +1048,21 @@ export function PersonalizationSection({ t, useConfig, update, reset, useHostAva
           {config.chrome.title !== null && (
             <button type="button" className={css.buttonGhost} onClick={() => set({ chrome: { ...config.chrome, title: null } })}>
               {t('chrome.titleClear')}
+            </button>
+          )}
+        </div>
+        <div className={css.row}>
+          <span className={css.rowLabel}>{t('chrome.statusLabel')}</span>
+          <input
+            type="text"
+            className={css.textInput}
+            placeholder={t('chrome.statusPlaceholder')}
+            value={config.chrome.statusText}
+            onChange={(e) => set({ chrome: { ...config.chrome, statusText: e.target.value.slice(0, 64) } })}
+          />
+          {config.chrome.statusText !== '' && (
+            <button type="button" className={css.buttonGhost} onClick={() => set({ chrome: { ...config.chrome, statusText: '' } })}>
+              {t('chrome.statusClear')}
             </button>
           )}
         </div>

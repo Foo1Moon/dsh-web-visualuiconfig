@@ -166,13 +166,13 @@ export function createPersonalizationToolDefinition(
 ): PersonalToolDefinition {
   return {
     name: 'personalization',
-    description: 'Change the DSH Web GUI personalization: accent color (hex), palette preset (a preset id from the preset catalog), panel transparency (0-0.9), typography (default/rounded/serif/mono), background image (local file path), storage mode (host/browser), master enable switch, or reset everything. Call this when the user asks to change the GUI theme/appearance/background, in any language. Returns a confirmation with the new revision.',
+    description: 'Change the DSH Web GUI personalization: accent color (hex), palette preset (ocean/violet/ember/rose), panel transparency (0-0.9), typography (default/rounded/serif/mono), background image (local file path), storage mode (host/browser), master enable switch, or reset everything. Call this when the user asks to change the GUI theme/appearance/background, in any language. Returns a confirmation with the new revision.',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
         accent: { type: 'string', description: 'Custom accent hex color, e.g. #ff8800 (overrides the preset).' },
-        preset: { type: 'string', enum: [...PRESET_IDS], description: 'Accent palette preset id from the preset catalog (builtin skins and Catppuccin flavors included).' },
+        preset: { type: 'string', enum: [...PRESET_IDS], description: 'Accent palette preset: ocean, violet, ember (warm orange), rose.' },
         transparency: { type: 'number', description: 'Panel transparency from 0 (opaque) to 0.9 (very transparent).' },
         font: { type: 'string', enum: [...FONT_IDS], description: 'Typography preset.' },
         storage: { type: 'string', enum: ['host', 'browser'], description: 'Where settings persist: host (machine file, follows across browsers) or browser (this browser only).' },

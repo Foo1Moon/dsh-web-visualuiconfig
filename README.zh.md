@@ -10,14 +10,14 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| 背景设置 | 每个面板（「全部面板」与单面板统一）都有「背景设置」：**纯色背景**（默认，面板显示底色，透明度仍可调半透明效果）或**背景图**（上传图按面板宽高比自动裁剪，渲染在该面板层级，遮罩可调）。「全部面板」上传是**源图桥**：只压缩不裁剪，各面板渲染时按自身宽高比 cover 裁剪；面板是否显示它取决于自身背景的「跟随主题」开关（存在独立背景的面板会给出提示） |
-| 全局背景 | 编辑目标之外的页面级分组：整页**底层**背景图（渲染在 body），与各面板背景独立；面板没有自己的背景图时透出它，面板有自定义背景图时盖住它 |
+| 背景设置 | 每个面板（「全部面板」与单面板统一）都有「背景设置」：**纯色背景**（默认，面板显示底色，透明度仍可调半透明效果）或**背景图**（上传图按面板宽高比自动裁剪，渲染在该面板层级，遮罩可调，**显示方式可选铺满/完整显示/拉伸/平铺**）。「全部面板」上传是**源图桥**：只压缩不裁剪，各面板渲染时按自身宽高比裁剪；面板是否显示它取决于自身背景的「跟随主题」开关（存在独立背景的面板会给出提示） |
+| 全局背景 | 编辑目标之外的页面级分组：整页**底层**背景图（渲染在 body），与各面板背景独立；面板没有自己的背景图时透出它，面板有自定义背景图时盖住它。支持**显示方式**（铺满/完整显示/拉伸/平铺）与**模糊**（0–60px，`filter` 应用在独立 fixed 背景层上，不会困住弹窗等 fixed 浮层） |
 | 面板透明度 | 0–0.9 滑块：0 = 官方不透明（背景图被面板完全遮住），向右面板越透明、背景图越透出；浮层（菜单/弹窗/输入）保持更高不透明度保证可读。不做 `backdrop-filter`：官方列容器上的 blur 会困住 fixed 浮层（设置弹窗等），这是 dsh-web-ui 皮肤体系验证过的边界 |
-| 主题色板 | 29 个预设：4 内置（海洋青 / 紫罗兰 / 暖橙 / 玫瑰红）+ 21 套角色皮肤（初音未来、原神、火影、鸣潮、恋与深空…，seeds 源自 deepseek-harness-skin，单明暗皮肤自动补对侧中性变体）+ 4 套 Catppuccin（Latte / Frappé / Macchiato / Mocha）；另支持自定义 accent（`color-mix` 派生全档位），覆盖 `--dsw-static-deepseek-*` 与 aionui 面板的 `--aion-*` token，亮/暗自动适配 |
+| 主题色板 | 4 个内置全局主题预设（海洋青 / 紫罗兰 / 暖橙 / 玫瑰红）+ 自定义 accent（`color-mix` 派生全档位），覆盖 `--dsw-static-deepseek-*` 与 aionui 面板的 `--aion-*` token，亮/暗自动适配。另保留 deepseek-harness-skin 21 套与 Catppuccin 4 套配色为**内部美术资产**（`src/shared/presets.ts` 的 `SKIN_PRESET_ASSETS` / `CATPPUCCIN_PRESET_ASSETS`），不向用户开放 |
 | 字体 | 圆润 / 衬线 / 等宽预设，或自定义 `font-family` 栈 |
 | 滚动条 | 圆角滚动条，亮/暗两套配色 |
 | 选中色 | 自定义 `::selection` 背景色 |
-| 页面外观 | favicon（≤128px 图）与页面标题覆盖 |
+| 页面外观 | favicon（≤128px 图）、页面标题覆盖，以及**运行状态文案**（替换官方「Deep diving...」，经 DOM 观察器注入 `[role="status"]`，清空即恢复官方文案） |
 | 面板级个性化 | 运行时检测当前存在的面板，「编辑目标」选单默认「全部面板」编辑基准外观（各面板的「跟随主题」开关继承它）；每个模块（面板透明度/主题色板/字体/滚动条/选中色/背景设置）都有「跟随主题」开关——单面板视图控制该面板该项，**「全部面板」视图批量控制所有面板的该项**；另有「全部跟随主题」总开关（两种视图都有）。当前面板：侧边栏、对话区、详情区、右侧文件/预览面板（aionui）、任务面板、SSH 面板 |
 | 配置存储 | 设置页「配置存储」小节选择配置保存位置：**跟随本机**（默认——宿主侧持久化到 `~/.dsh/dsh-web-personalization.json`，重启仍生效且**换浏览器也跟随**）或**仅此浏览器**（原始的 `localStorage` 行为）。背景图作为文件存于 `~/.dsh/personalization/`，以短同源 URL 提供，不再受 localStorage 配额与 2MB CSS `url()` 限制 |
 | 角色风格主题 | 给一张动漫角色图 + 一段角色介绍，agent 读图推导 **4 个色种**（accent/secondary/surface/text）+ 明暗 + 字体/透明度/滚动条/选中色/背景/标题，经 **OKLab 保对比度推导**（移植自 deepseek-harness-skin）生成整套 `--dsw-*` 色阶覆盖并应用。**两阶段确认制**：先给出 2-3 套候选方案与用户讨论，用户明确确认后才应用。主题存入库（`themes`），可随时切换/关闭/删除；关闭即还原启用前的官方外观 |
@@ -82,7 +82,7 @@ dsh plugin --profile web add link:<克隆到的路径>
     http://127.0.0.1:3080/personalization/config
   ```
 - **命令**——对话输入框直接敲 `/personalization`（不经模型）：`show`、`set accent #hex`、
-  `set preset <id>`（29 个预设 id，见设置页主题色卡）、`set glass 0-0.9`、`set font default|rounded|serif|mono`、
+  `set preset ocean|violet|ember|rose`、`set glass 0-0.9`、`set font default|rounded|serif|mono`、
   `set storage host|browser`、`background set <本地图片路径>`、`background remove`、`reset`。
 - **服务**——其他插件 `inject: ['personalization']` 即可调用 `read()` / `update(patch)` /
   `reset()` / `onUpdated(cb)`。
@@ -157,7 +157,7 @@ src/host/character-tool.ts      # character_theme / character_theme_manage 工�
 src/host/patch.ts               # deepMerge 部分更新（re-export 共享实现，保历史路径）
 src/host/types.ts               # webServer/commands/personalization 服务的最小类型桥
 src/shared/config.ts            # 配置模型 + sanitize + storageMode + asset 引用 + 主题库/色种类型
-src/shared/presets.ts           # 预设主题目录：4 内置 + 21 皮肤（deepseek-harness-skin）+ 4 Catppuccin
+src/shared/presets.ts           # 预设目录（4 内置全局主题）+ 皮肤/Catppuccin 配色美术资产
 src/shared/theme.ts             # 主题库纯逻辑：激活/切换/关闭/删除/快照还原/patch 构建
 src/shared/patch.ts             # deepMerge（环境无关，两个 bundle 内联）
 src/shared/color.ts             # OKLab/OKLCh 色彩数学（移植自 deepseek-harness-skin，MIT）
@@ -168,6 +168,7 @@ src/shared/stock.ts             # 上游色板数据类型（StockStep/StockData
 src/shared/stock.generated.ts   # 生成数据：73 阶色阶 + 89 语义别名（scripts/build-stock.mjs 产出）
 src/client/index.ts             # 浏览器半区：注册设置页、接线引擎与 host 同步（SSE）
 src/client/engine.ts            # 生效引擎：属性作用域推导色板/背景 fixed 层/字体/滚动条/选中/chrome
+src/client/status-injector.ts   # 运行状态文案注入：MutationObserver 改写 [role="status"]（官方 Deep diving...）
 src/client/settings.ts          # 共享模型之上的 localStorage 缓存（旧版迁移在 shared/config.ts）
 src/client/host.ts              # 浏览器 → host 传输层（fetch 封装）
 src/client/PersonalizationSection.tsx  # 设置页组件

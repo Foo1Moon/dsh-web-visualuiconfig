@@ -1,11 +1,15 @@
 /**
- * The palette-preset catalog: four built-in presets, 21 single-scheme skins
- * (from deepseek-harness-skin, MIT, © 2026 HeiGeAi — the same project the
- * OKLab derivation in src/shared/color.ts was ported from) and the four
- * Catppuccin flavors (Latte / Frappé / Macchiato / Mocha, official palette
- * values). Each preset resolves to per-scheme seeds; a single-scheme skin's
- * opposite scheme is derived as a neutral high-contrast variant of the same
- * voice colors, so it works in either light or dark UI.
+ * The palette-preset catalog: only the four built-in global themes are public.
+ * The 21 single-scheme skins (from deepseek-harness-skin, MIT, © 2026 HeiGeAi —
+ * the same project the OKLab derivation in src/shared/color.ts was ported
+ * from) and the four Catppuccin flavors are kept as colour art assets
+ * (SKIN_PRESET_ASSETS / CATPPUCCIN_PRESET_ASSETS) for future features but are
+ * NOT exposed to users — the product surface is character themes + global
+ * background only.
+ *
+ * Each preset resolves to per-scheme seeds; a single-scheme skin's opposite
+ * scheme is derived as a neutral high-contrast variant of the same voice
+ * colors, so it works in either light or dark UI.
  *
  * Shared by both halves: the client engine derives the `--dsw-*` ramp from
  * these seeds at apply time, the host command/tool layer validates preset ids
@@ -101,8 +105,9 @@ const BUILTIN: readonly PalettePreset[] = Object.freeze([
   }),
 ])
 
-/** 21 skins from deepseek-harness-skin (seeds + declared scheme). */
-const SKINS: readonly PalettePreset[] = Object.freeze([
+/** Colour art assets: 21 skins from deepseek-harness-skin (seeds + declared
+ *  scheme). Kept for future features; NOT part of the public catalog. */
+export const SKIN_PRESET_ASSETS: readonly PalettePreset[] = Object.freeze([
   skin('qq-2007', 'QQ 2007', 'light', { accent: '#1e6eb5', secondary: '#0b3c6d', surface: '#c3d5e6', text: '#1a1a1a' }),
   skin('qq-2008', 'QQ 2008·粉', 'light', { accent: '#c8447e', secondary: '#d98bb0', surface: '#f6e2ec', text: '#2b1020' }),
   skin('miku', '初音未来', 'light', { accent: '#19c9e5', secondary: '#ed6ec1', surface: '#f5f6fc', text: '#122c60' }),
@@ -126,20 +131,18 @@ const SKINS: readonly PalettePreset[] = Object.freeze([
   skin('liangsheng', '梁圣·静音', 'light', { accent: '#12459f', secondary: '#8397b5', surface: '#f3f7fc', text: '#0d1c33' }),
 ])
 
-/** The four Catppuccin flavors (official palette: mauve accent, pink second). */
-const CATPPUCCIN: readonly PalettePreset[] = Object.freeze([
+/** Colour art assets: the four Catppuccin flavors (official palette: mauve
+ *  accent, pink second). Kept for future features; NOT part of the public
+ *  catalog. */
+export const CATPPUCCIN_PRESET_ASSETS: readonly PalettePreset[] = Object.freeze([
   catppuccin('catppuccin-latte', 'Catppuccin · Latte', 'light', { accent: '#8839ef', secondary: '#ea76cb', surface: '#eff1f5', text: '#4c4f69' }),
   catppuccin('catppuccin-frappe', 'Catppuccin · Frappé', 'dark', { accent: '#ca9ee6', secondary: '#f4b8e4', surface: '#303446', text: '#c6d0f5' }),
   catppuccin('catppuccin-macchiato', 'Catppuccin · Macchiato', 'dark', { accent: '#c6a0f6', secondary: '#f5bde6', surface: '#24273a', text: '#cad3f5' }),
   catppuccin('catppuccin-mocha', 'Catppuccin · Mocha', 'dark', { accent: '#cba6f7', secondary: '#f5c2e7', surface: '#1e1e2e', text: '#cdd6f4' }),
 ])
 
-/** The full preset catalog, in display order (builtin → skin → catppuccin). */
-export const PALETTE_PRESETS: readonly PalettePreset[] = Object.freeze([
-  ...BUILTIN,
-  ...SKINS,
-  ...CATPPUCCIN,
-])
+/** The public preset catalog — the built-in global themes only. */
+export const PALETTE_PRESETS: readonly PalettePreset[] = Object.freeze([...BUILTIN])
 
 /** The accepted preset ids (drives host-side validation and tool enums). */
 export const PRESET_IDS: readonly string[] = Object.freeze(PALETTE_PRESETS.map(p => p.id))

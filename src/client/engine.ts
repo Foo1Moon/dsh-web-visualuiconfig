@@ -32,13 +32,14 @@
  */
 import type { PanelConfig, PanelId, PersonalizationConfig } from './settings.ts'
 import { PANEL_IDS, resolvePanelConfig } from './settings.ts'
-import type { PaletteSeeds } from './settings.ts'
+import type { PaletteSeeds, BackgroundFit } from './settings.ts'
 import { isAssetRef, parseAssetRef, resolveImageSource } from '../shared/config.ts'
 import { deriveSkin, type SkinAppearance } from '../shared/derive.ts'
 import { luminance, parseColor } from '../shared/color.ts'
 import { PALETTE_PRESETS, type PalettePreset } from '../shared/presets.ts'
 import { STOCK } from '../shared/stock.generated.ts'
 import { PANEL_SCOPE_SELECTOR } from './panels.ts'
+import { installStatusInjector } from './status-injector.ts'
 
 /** Body attribute selecting the personalization CSS scope. */
 const BODY_ATTRIBUTE = 'data-dsh-personal'
@@ -460,6 +461,29 @@ function backdropImage(image: string, scrim?: string): string {
   return `linear-gradient(rgba(10, 14, 28, ${alpha}) 0%, rgba(10, 14, 28, ${alpha}) 100%), url(${resolveBackgroundUrl(image)})`
 }
 
+/** Background-size (per layer) for each fit mode. The backdrop is two layers
+ *  (scrim gradient over the picture): the gradient always covers, the picture
+ *  follows the fit. */
+const FIT_SIZE: Record<BackgroundFit, string> = {
+  cover: 'cover',
+  contain: 'contain',
+  stretch: '100% 100%',
+  tile: 'auto',
+}
+
+/** Background-repeat (per layer) for each fit mode. */
+const FIT_REPEAT: Record<BackgroundFit, string> = {
+  cover: 'no-repeat',
+  contain: 'no-repeat',
+  stretch: 'no-repeat',
+  tile: 'repeat',
+}
+
+/** Two-layer background-size/repeat declarations for one fit mode. */
+function backdropFit(fit: BackgroundFit): string {
+  return `background-size:cover, ${FIT_SIZE[fit]};background-repeat:no-repeat, ${FIT_REPEAT[fit]}`
+}
+
 /** Light/dark selectors scoping one panel's overrides to its own subtree. */
 function scopeSelectors(id: PanelId): { light: string; dark: string } {
   const raw = PANEL_SCOPE_SELECTOR[id]
@@ -735,9 +759,18 @@ export function applyPersonalization(config: PersonalizationConfig): () => void 
   if (hasGlobalBg) {
     backdropLayer = document.createElement('div')
     backdropLayer.dataset.dshPersonalBackdrop = ''
-    backdropLayer.style.cssText = 'position:fixed;inset:0;z-index:-1;background-position:center;background-size:cover;background-repeat:no-repeat'
+    backdropLayer.style.cssText = 'position:fixed;inset:0;z-index:-1;background-position:center'
     backdropLayer.style.setProperty('background-image', backdropImage(globalBg))
+    backdropLayer.style.setProperty('background-size', `cover, ${FIT_SIZE[config.globalBackground.fit]}`)
+    backdropLayer.style.setProperty('background-repeat', `no-repeat, ${FIT_REPEAT[config.globalBackground.fit]}`)
     backdropLayer.style.setProperty(SCRIM_VARIABLE, String(config.globalBackground.scrim))
+    if (config.globalBackground.blur > 0) {
+      // The blur lives on the standalone fixed backdrop element (z-index:-1),
+      // never on a column — so it creates no containing block for the fixed
+      // overlays (settings modal, popovers). Verified against dsh-skin, which
+      // does exactly this.
+      backdropLayer.style.filter = `blur(${config.globalBackground.blur}px)`
+    }
     document.body.appendChild(backdropLayer)
   }
 
@@ -786,7 +819,7 @@ export function applyPersonalization(config: PersonalizationConfig): () => void 
     if (pc.background.mode === 'image' && pc.background.image !== null && pc.background.image !== undefined) {
       const scope = scopeSelectors(id)
       rules.unshift(
-        `${scope.light}{${scrimVariable(id)}:${pc.background.scrim};background-image:${backdropImage(pc.background.image, scrimVariable(id))};background-position:center;background-size:cover;background-repeat:no-repeat}`,
+        `${scope.light}{${scrimVariable(id)}:${pc.background.scrim};background-image:${backdropImage(pc.background.image, scrimVariable(id))};background-position:center;${backdropFit(pc.background.fit)}}`,
       )
     }
     cssParts.push(...rules)
@@ -820,6 +853,14 @@ export function applyPersonalization(config: PersonalizationConfig): () => void 
     document.title = config.chrome.title
   }
 
+  // Running-turn status text: replaces the official "Deep diving..." label
+  // via a DOM observer (upstream hard-codes it with no seam); '' keeps the
+  // official label and installs nothing.
+  const statusText = (config.chrome.statusText ?? '').trim()
+  const statusInjector = statusText === ''
+    ? null
+    : installStatusInjector(statusText)
+
   return () => {
     body.removeAttribute(BODY_ATTRIBUTE)
     if (previousScheme) body.setAttribute(SCHEME_ATTRIBUTE, '')
@@ -828,5 +869,6 @@ export function applyPersonalization(config: PersonalizationConfig): () => void 
     style.remove()
     if (favicon !== undefined) favicon.remove()
     if (document.title !== previousTitle) document.title = previousTitle
+    statusInjector?.()
   }
 }
