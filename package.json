@@ -1,8 +1,15 @@
 {
   "name": "dsh-web-visualuiconfig",
   "description": "DSH Web GUI 个性化插件：背景图、遮罩浓度、半透明面板、主题色板、字体、滚动条、选中色、favicon 与标题自定义。",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
